@@ -1,10 +1,12 @@
+using LiteMon.Core.Sensors;
+
 namespace LiteMon.Core.Metrics;
 
 /// <summary>
 /// 采样构建器。只在采样线程使用，不做线程同步。
 /// 每次 <see cref="Build"/> 产生一个不可变快照；未写入的槽位保持 Unavailable。
 /// </summary>
-public sealed class SnapshotBuilder
+public sealed class SnapshotBuilder : IMetricWriter
 {
     /// <summary>超过该时长未更新的 Ok 值会被标记为 Stale（必须大于最慢采样档 10 s）。</summary>
     public const long StaleAfterMs = 12_000;
