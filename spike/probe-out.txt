@@ -1,0 +1,64 @@
+=== LiteMon M0 HwProbe ===
+OS      : Microsoft Windows NT 10.0.26300.0 (build 26300)
+Runtime : 10.0.1
+CPU     : 16 logical cores
+Admin   : False
+Time    : 2026-10-19 23:30:18 +08:00
+
+== S1 LibreHardwareMonitor (PawnIO) ==
+  Open() = 238 ms
+  Motherboard    GM5HG0A  update=0.0ms
+  Cpu            AMD Ryzen 7 8845H w/ Radeon 780M Graphics  update=5.7ms
+      Power        Package                                 0.0
+      Clock        Cores (Average)                         0.0
+      Clock        Cores (Average Effective)               0.0
+      Clock        Core #1 (Effective)                     0.0
+      Power        Core #1 (SMU)                           0.0
+      Voltage      Core #1 VID                             1.5
+      Clock        Core #2 (Effective)                     0.0
+      Power        Core #2 (SMU)                           0.0
+      Voltage      Core #2 VID                             1.5
+      Clock        Core #3 (Effective)                     0.0
+      Power        Core #3 (SMU)                           0.0
+      Voltage      Core #3 VID                             1.5
+      Clock        Core #4 (Effective)                     0.0
+      Power        Core #4 (SMU)                           0.0
+      Voltage      Core #4 VID                             1.5
+      Clock        Core #5 (Effective)                     0.0
+      Power        Core #5 (SMU)                           0.0
+      Voltage      Core #5 VID                             1.5
+      Clock        Core #6 (Effective)                     0.0
+      Power        Core #6 (SMU)                           0.0
+      Voltage      Core #6 VID                             1.5
+      Clock        Core #7 (Effective)                     0.0
+      Power        Core #7 (SMU)                           0.0
+      Voltage      Core #7 VID                             1.5
+      Clock        Core #8 (Effective)                     0.0
+      Power        Core #8 (SMU)                           0.0
+      Voltage      Core #8 VID                             1.5
+      Temperature  Core (Tctl/Tdie)                        0.0
+      Voltage      Core (SVI2 TFN)                         1.5
+      Voltage      SoC (SVI2 TFN)                          1.5
+  summary: temperature=1, fan=0
+
+== S2 NVML (NVIDIA) ==
+  nvmlInit_v2 = 0
+  device count = 1
+  [0] NVIDIA GeForce RTX 4060 Laptop GPU | 58 C | 12.0 W | GPU 35% | MEM 1661/8188 MB
+
+== S3 NVMe temperature (IOCTL) ==
+  PhysicalDrive0: access denied (需要管理员)
+  PhysicalDrive1: IOException Could not find file '\\.\PhysicalDrive1'.
+  PhysicalDrive2: IOException Could not find file '\\.\PhysicalDrive2'.
+  PhysicalDrive3: IOException Could not find file '\\.\PhysicalDrive3'.
+  PhysicalDrive4: IOException Could not find file '\\.\PhysicalDrive4'.
+  PhysicalDrive5: IOException Could not find file '\\.\PhysicalDrive5'.
+  PhysicalDrive6: IOException Could not find file '\\.\PhysicalDrive6'.
+  PhysicalDrive7: IOException Could not find file '\\.\PhysicalDrive7'.
+
+== S4 system counters ==
+    PdhOpenQuery rc=0x00000000
+  PDH open = True
+  #1 CPU --% | MEM 47.3% (14.8/31.3 GB) | DISK R 0.00 MB/s W 0.00 MB/s | NET down 8.64 / up 1.66 MB/s
+  #2 CPU 16.7% | MEM 47.3% (14.8/31.3 GB) | DISK R 0.00 MB/s W 0.61 MB/s | NET down 0.35 / up 0.17 MB/s
+  #3 CPU 24.4% | MEM 47.3% (14.8/31.3 GB) | DISK R 0.00 MB/s W 0.39 MB/s | NET down 0.07 / up 0.04 MB/s

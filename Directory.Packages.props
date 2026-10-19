@@ -1,0 +1,19 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 传感器 -->
+    <PackageVersion Include="LibreHardwareMonitorLib" Version="0.9.6" />
+    <!-- 互操作代码生成 -->
+    <PackageVersion Include="Microsoft.Windows.CsWin32" Version="0.3.269" />
+    <!-- 基础设施 -->
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.0" />
+    <PackageVersion Include="System.Management" Version="10.0.2" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+    <!-- 测试：xunit.v3 自带 Microsoft.Testing.Platform，可 dotnet run 直接执行 -->
+    <PackageVersion Include="xunit.v3" Version="4.0.2" />
+    <PackageVersion Include="BenchmarkDotNet" Version="0.15.2" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\LiteMon.Core\LiteMon.Core.csproj" />
+    <ProjectReference Include="..\LiteMon.Sensors\LiteMon.Sensors.csproj" />
+    <ProjectReference Include="..\LiteMon.Rendering\LiteMon.Rendering.csproj" />
+    <ProjectReference Include="..\LiteMon.Settings\LiteMon.Settings.csproj" />
+    <ProjectReference Include="..\LiteMon.Diagnostics\LiteMon.Diagnostics.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+</Project>
