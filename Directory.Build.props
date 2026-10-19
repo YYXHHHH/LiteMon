@@ -12,4 +12,8 @@
     <Version>0.1.0</Version>
     <NeutralLanguage>en</NeutralLanguage>
   </PropertyGroup>
+  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
+    <!-- 测试方法名允许下划线：Bytes_Uses1024Base 这类命名是社区惯例 -->
+    <NoWarn>$(NoWarn);CA1707</NoWarn>
+  </PropertyGroup>
 </Project>
