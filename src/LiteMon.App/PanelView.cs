@@ -6,6 +6,7 @@ using LiteMon.Core.Diagnostics;
 using LiteMon.Core.Formatting;
 using LiteMon.Core.Metrics;
 using LiteMon.Core.Snapshots;
+using LiteMon.Sensors;
 
 namespace LiteMon.App;
 
@@ -21,64 +22,88 @@ internal enum RowKind
 
 internal sealed record RowSpec(MetricId Id, string Label, RowKind Kind);
 
-/// <summary>自绘面板：12 行指标、文本缓存、收敛即停的动画。</summary>
+internal sealed record GroupSpec(string Title, string Model, RowSpec[] Rows);
+
+/// <summary>自绘面板：按硬件分组，标题带型号，12 行指标。</summary>
 internal sealed class PanelView : FrameworkElement
 {
-    private static readonly RowSpec[] Rows =
-    [
-        new(MetricId.CpuLoad, "CPU 使用率", RowKind.Percent),
-        new(MetricId.CpuTemp, "CPU 温度", RowKind.Temp),
-        new(MetricId.CpuClockMhz, "CPU 频率", RowKind.Mhz),
-        new(MetricId.GpuLoad, "GPU 使用率", RowKind.Percent),
-        new(MetricId.GpuTemp, "GPU 温度", RowKind.Temp),
-        new(MetricId.GpuMemUsedMb, "显存", RowKind.Memory),
-        new(MetricId.MemUsedPercent, "内存", RowKind.Percent),
-        new(MetricId.DiskReadBps, "磁盘读", RowKind.Rate),
-        new(MetricId.DiskWriteBps, "磁盘写", RowKind.Rate),
-        new(MetricId.NetDownBps, "网络下行", RowKind.Rate),
-        new(MetricId.NetUpBps, "网络上行", RowKind.Rate),
-        new(MetricId.UptimeSeconds, "运行时长", RowKind.Uptime),
-    ];
-
     private static readonly Brush Background = Frozen(Color.FromArgb(0xFF, 0x0B, 0x0E, 0x14));
     private static readonly Brush Border = Frozen(Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF));
     private static readonly Brush LabelBrush = Frozen(Color.FromRgb(0xA9, 0xB4, 0xC0));
     private static readonly Brush ValueBrush = Frozen(Color.FromRgb(0xF5, 0xF7, 0xFA));
     private static readonly Brush MutedBrush = Frozen(Color.FromRgb(0x6B, 0x76, 0x84));
+    private static readonly Brush GroupBrush = Frozen(Color.FromRgb(0x7F, 0xB2, 0xE5));
+    private static readonly Brush ModelBrush = Frozen(Color.FromRgb(0x5F, 0x6C, 0x7A));
     private static readonly Brush TrackBrush = Frozen(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
     private static readonly Brush LowBrush = Frozen(Color.FromRgb(0x4A, 0xDE, 0x80));
     private static readonly Brush MidBrush = Frozen(Color.FromRgb(0xFB, 0xBF, 0x24));
     private static readonly Brush HighBrush = Frozen(Color.FromRgb(0xF8, 0x71, 0x71));
     private static readonly Pen BorderPen = CreatePen(Border);
     private static readonly Pen ClosePen = CreatePen(new SolidColorBrush(Color.FromRgb(0xA9, 0xB4, 0xC0)), 1.2);
-
-    private readonly SnapshotBus _bus;
-    private readonly Dictionary<(string Text, double Size, bool Bold), FormattedText> _textCache = new();
-    private readonly Dictionary<MetricId, double> _display = new();
-    private readonly Dictionary<MetricId, double> _animFrom = new();
-    private long _animStartTicks;
+    private static readonly bool NoAnimation = Environment.GetEnvironmentVariable("LITEMON_NO_ANIMATION") == "1";
 
     private const double AnimationMs = 300;
 
-    private static readonly bool NoAnimation = Environment.GetEnvironmentVariable("LITEMON_NO_ANIMATION") == "1";
-
+    private readonly SnapshotBus _bus;
+    private readonly GroupSpec[] _groups;
+    private readonly Dictionary<(string Text, double Size, bool Bold), FormattedText> _textCache = new();
+    private readonly Dictionary<MetricId, double> _display = new();
+    private readonly Dictionary<MetricId, double> _animFrom = new();
     private readonly DispatcherTimer _animTimer;
-    private Snapshot _snapshot = Snapshot.Empty;
 
-    public PanelView(SnapshotBus bus)
+    private Snapshot _snapshot = Snapshot.Empty;
+    private long _animStartTicks;
+
+    public PanelView(SnapshotBus bus, DeviceInfo devices)
     {
         _bus = bus;
+        _groups = BuildGroups(devices);
         _bus.Updated += OnSnapshotUpdated;
         Unloaded += (_, _) => _bus.Updated -= OnSnapshotUpdated;
 
-        // 用 30 fps 定时器而不是 CompositionTarget.Rendering：
-        // 后者在部分机器上退订后仍持续触发，导致整窗每秒重绘几十次。
+        // 30 fps 定时器驱动动画；CompositionTarget.Rendering 在部分机器上退订后仍触发
         _animTimer = new DispatcherTimer(DispatcherPriority.Render)
         {
             Interval = TimeSpan.FromMilliseconds(33),
         };
         _animTimer.Tick += OnFrame;
     }
+
+    private static GroupSpec[] BuildGroups(DeviceInfo devices) =>
+    [
+        new("CPU", devices.CpuName,
+        [
+            new(MetricId.CpuLoad, "使用率", RowKind.Percent),
+            new(MetricId.CpuTemp, "温度", RowKind.Temp),
+            new(MetricId.CpuClockMhz, "频率", RowKind.Mhz),
+        ]),
+        new("GPU", devices.GpuName,
+        [
+            new(MetricId.GpuLoad, "使用率", RowKind.Percent),
+            new(MetricId.GpuTemp, "温度", RowKind.Temp),
+            new(MetricId.GpuMemUsedMb, "显存", RowKind.Memory),
+        ]),
+        new("内存", devices.MemoryText,
+        [
+            new(MetricId.MemUsedPercent, "使用率", RowKind.Percent),
+        ]),
+        new("磁盘", devices.DiskName,
+        [
+            new(MetricId.DiskReadBps, "读取", RowKind.Rate),
+            new(MetricId.DiskWriteBps, "写入", RowKind.Rate),
+        ]),
+        new("网络", devices.NicName,
+        [
+            new(MetricId.NetDownBps, "下行", RowKind.Rate),
+            new(MetricId.NetUpBps, "上行", RowKind.Rate),
+        ]),
+        new("系统", string.Empty,
+        [
+            new(MetricId.UptimeSeconds, "运行时长", RowKind.Uptime),
+        ]),
+    ];
+
+    private IEnumerable<RowSpec> AllRows => _groups.SelectMany(g => g.Rows);
 
     private static SolidColorBrush Frozen(Color color)
     {
@@ -107,7 +132,7 @@ internal sealed class PanelView : FrameworkElement
 
         if (NoAnimation)
         {
-            foreach (var row in Rows)
+            foreach (var row in AllRows)
             {
                 var sample = snapshot.Get(row.Id);
                 _display[row.Id] = sample.Status == MetricStatus.Ok ? sample.Value : 0;
@@ -117,7 +142,7 @@ internal sealed class PanelView : FrameworkElement
             return;
         }
 
-        foreach (var row in Rows)
+        foreach (var row in AllRows)
         {
             _animFrom[row.Id] = _display.GetValueOrDefault(row.Id);
         }
@@ -136,9 +161,9 @@ internal sealed class PanelView : FrameworkElement
 
         double elapsedMs = (Stopwatch.GetTimestamp() - _animStartTicks) * 1000.0 / Stopwatch.Frequency;
         double progress = Math.Clamp(elapsedMs / AnimationMs, 0, 1);
-        double eased = 1 - Math.Pow(1 - progress, 3);   // easeOutCubic
+        double eased = 1 - Math.Pow(1 - progress, 3);
 
-        foreach (var row in Rows)
+        foreach (var row in AllRows)
         {
             var sample = _snapshot.Get(row.Id);
             double target = sample.Status == MetricStatus.Ok ? sample.Value : 0;
@@ -156,8 +181,8 @@ internal sealed class PanelView : FrameworkElement
 
     protected override Size MeasureOverride(Size availableSize)
         => new(
-            double.IsInfinity(availableSize.Width) ? 320 : availableSize.Width,
-            double.IsInfinity(availableSize.Height) ? 500 : availableSize.Height);
+            double.IsInfinity(availableSize.Width) ? 340 : availableSize.Width,
+            double.IsInfinity(availableSize.Height) ? 560 : availableSize.Height);
 
     protected override void OnRender(DrawingContext dc)
     {
@@ -173,17 +198,36 @@ internal sealed class PanelView : FrameworkElement
         dc.DrawLine(ClosePen, new Point(width - 18, 15), new Point(width - 28, 25));
 
         const double header = 42;
-        const double footer = 26;
-        double rowHeight = (height - header - footer) / Rows.Length;
+        const double footer = 24;
+        const double groupHeader = 17;
+
+        int rowCount = _groups.Sum(g => g.Rows.Length);
+        double rowHeight = (height - header - footer - (_groups.Length * groupHeader)) / rowCount;
+
         double y = header;
 
-        foreach (var row in Rows)
+        foreach (var group in _groups)
         {
-            DrawRow(dc, row, y, rowHeight, width);
-            y += rowHeight;
+            var title = GetText(group.Title, 9, true, GroupBrush);
+            dc.DrawText(title, new Point(16, y));
+
+            if (group.Model.Length > 0)
+            {
+                double maxWidth = width - 32 - title.Width - 8;
+                var model = GetText(group.Model, 9, false, ModelBrush, maxWidth);
+                dc.DrawText(model, new Point(16 + title.Width + 8, y));
+            }
+
+            y += groupHeader;
+
+            foreach (var row in group.Rows)
+            {
+                DrawRow(dc, row, y, rowHeight, width);
+                y += rowHeight;
+            }
         }
 
-        dc.DrawText(GetText(FooterText(), 10, false, MutedBrush), new Point(16, height - 20));
+        dc.DrawText(GetText(FooterText(), 10, false, MutedBrush), new Point(16, height - 19));
         PerfCounters.AddRender(Stopwatch.GetTimestamp() - start);
     }
 
@@ -251,9 +295,9 @@ internal sealed class PanelView : FrameworkElement
         _ => MetricFormatter.Format(row.Id, value),
     };
 
-    private FormattedText GetText(string text, double size, bool bold, Brush brush)
+    private FormattedText GetText(string text, double size, bool bold, Brush brush, double maxWidth = 0)
     {
-        if (_textCache.Count > 128)
+        if (_textCache.Count > 256)
         {
             _textCache.Clear();
         }
@@ -273,6 +317,12 @@ internal sealed class PanelView : FrameworkElement
             size,
             brush,
             VisualTreeHelper.GetDpi(this).PixelsPerDip);
+
+        if (maxWidth > 0)
+        {
+            formatted.MaxTextWidth = maxWidth;
+            formatted.Trimming = TextTrimming.CharacterEllipsis;
+        }
 
         _textCache[key] = formatted;
         return formatted;

@@ -1,6 +1,7 @@
 using System.Net.NetworkInformation;
 using LiteMon.Core.Metrics;
 using LiteMon.Core.Sensors;
+using LiteMon.Sensors.Interop;
 
 namespace LiteMon.Sensors;
 
@@ -11,7 +12,7 @@ public sealed class NetworkProvider : ISensorProvider
     private long _prevOut;
     private long _prevTs;
     private bool _primed;
-    private NetworkInterface[]? _nics;
+    private NetworkInterface? _nic;
     private long _refreshAt;
 
     public string Name => "network";
@@ -71,35 +72,30 @@ public sealed class NetworkProvider : ISensorProvider
     /// <summary>
     /// 枚举网卡很贵（本机实测 ~28 ms/次），必须缓存；每 60 秒或取数失败时重建。
     /// </summary>
+    /// <summary>只统计主网卡（有默认网关、非虚拟），与面板显示的型号一致。</summary>
     private (long In, long Out) Totals()
     {
         long now = Environment.TickCount64;
-        if (_nics is null || now >= _refreshAt)
+        if (_nic is null || now >= _refreshAt)
         {
-            _nics = NetworkInterface.GetAllNetworkInterfaces()
-                .Where(nic => nic.OperationalStatus == OperationalStatus.Up
-                              && nic.NetworkInterfaceType is NetworkInterfaceType.Ethernet or NetworkInterfaceType.Wireless80211)
-                .ToArray();
+            _nic = NetworkSelection.Primary();
             _refreshAt = now + 60_000;
         }
 
-        long inBytes = 0;
-        long outBytes = 0;
-
-        foreach (var nic in _nics)
+        if (_nic is null)
         {
-            try
-            {
-                var stats = nic.GetIPStatistics();
-                inBytes += stats.BytesReceived;
-                outBytes += stats.BytesSent;
-            }
-            catch (NetworkInformationException)
-            {
-                _nics = null;   // 网卡失效：下次重建
-            }
+            return (0, 0);
         }
 
-        return (inBytes, outBytes);
+        try
+        {
+            var stats = _nic.GetIPStatistics();
+            return (stats.BytesReceived, stats.BytesSent);
+        }
+        catch (NetworkInformationException)
+        {
+            _nic = null;
+            return (0, 0);
+        }
     }
 }

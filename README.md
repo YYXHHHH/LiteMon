@@ -22,6 +22,7 @@ dotnet run --project src/LiteMon.App -c Release
 | CPU 占用 | **1.6%（单核）**，优化前 11–14% |
 | 内存 | 工作集 ~185 MB / 私有 ~122 MB（WPF 基线，见 M0 报告） |
 | 刷新 | 1 s，12 项指标（CPU 使用率/频率、GPU 使用率/温度/显存、内存、磁盘读写、网络上下行、运行时长） |
+| 硬件型号 | 分组标题显示 CPU/GPU/内存/磁盘/网卡型号（如 Ryzen 7 8845H、RTX 4060 Laptop、Crucial 31.3 GB、YMTC PC411、MediaTek Wi-Fi 6E） |
 | 温度 | **CPU 70 ℃ 可读**（ACPI 热区回退，无需管理员）；内核温度需右键菜单提权（LHM/PawnIO） |
 | 交互 | 置顶、拖动、Esc/×/右键退出 |
 

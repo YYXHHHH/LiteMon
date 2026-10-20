@@ -3,17 +3,18 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using LiteMon.Core.Snapshots;
+using LiteMon.Sensors;
 
 namespace LiteMon.App;
 
 /// <summary>无边框置顶面板：拖动移动、右上角 × 或 Esc 退出、右键菜单退出。</summary>
 public sealed class PanelWindow : Window
 {
-    public PanelWindow(SnapshotBus bus)
+    public PanelWindow(SnapshotBus bus, DeviceInfo devices)
     {
         Title = "LiteMon";
-        Width = 320;
-        Height = 500;
+        Width = 340;
+        Height = 560;
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
         // 关闭 AllowsTransparency：分层窗口会让 WPF 退回软件渲染，CPU 会飙升到 10%+
@@ -28,7 +29,7 @@ public sealed class PanelWindow : Window
 
         HorizontalContentAlignment = HorizontalAlignment.Stretch;
         VerticalContentAlignment = VerticalAlignment.Stretch;
-        Content = new PanelView(bus);
+        Content = new PanelView(bus, devices);
 
         MouseLeftButtonDown += OnMouseLeftButtonDown;
         KeyDown += OnKeyDown;

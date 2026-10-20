@@ -35,7 +35,8 @@ public partial class App : Application
         _sampling = new SamplingService(providers, bus);
         _sampling.Start();
 
-        new PanelWindow(bus).Show();
+        DeviceInfo devices = DeviceInfoCollector.Collect();
+        new PanelWindow(bus, devices).Show();
         StartDiagnostics();
     }
 
