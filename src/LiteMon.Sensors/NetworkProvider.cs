@@ -11,6 +11,8 @@ public sealed class NetworkProvider : ISensorProvider
     private long _prevOut;
     private long _prevTs;
     private bool _primed;
+    private NetworkInterface[]? _nics;
+    private long _refreshAt;
 
     public string Name => "network";
 
@@ -66,23 +68,26 @@ public sealed class NetworkProvider : ISensorProvider
     {
     }
 
-    private static (long In, long Out) Totals()
+    /// <summary>
+    /// 枚举网卡很贵（本机实测 ~28 ms/次），必须缓存；每 60 秒或取数失败时重建。
+    /// </summary>
+    private (long In, long Out) Totals()
     {
+        long now = Environment.TickCount64;
+        if (_nics is null || now >= _refreshAt)
+        {
+            _nics = NetworkInterface.GetAllNetworkInterfaces()
+                .Where(nic => nic.OperationalStatus == OperationalStatus.Up
+                              && nic.NetworkInterfaceType is NetworkInterfaceType.Ethernet or NetworkInterfaceType.Wireless80211)
+                .ToArray();
+            _refreshAt = now + 60_000;
+        }
+
         long inBytes = 0;
         long outBytes = 0;
 
-        foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
+        foreach (var nic in _nics)
         {
-            if (nic.OperationalStatus != OperationalStatus.Up)
-            {
-                continue;
-            }
-
-            if (nic.NetworkInterfaceType is not (NetworkInterfaceType.Ethernet or NetworkInterfaceType.Wireless80211))
-            {
-                continue;
-            }
-
             try
             {
                 var stats = nic.GetIPStatistics();
@@ -91,7 +96,7 @@ public sealed class NetworkProvider : ISensorProvider
             }
             catch (NetworkInformationException)
             {
-                // 部分虚拟网卡不提供统计
+                _nics = null;   // 网卡失效：下次重建
             }
         }
 

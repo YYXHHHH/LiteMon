@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using LiteMon.Core.Diagnostics;
 using LiteMon.Core.Formatting;
 using LiteMon.Core.Metrics;
 using LiteMon.Core.Snapshots;
@@ -53,15 +55,29 @@ internal sealed class PanelView : FrameworkElement
     private readonly SnapshotBus _bus;
     private readonly Dictionary<(string Text, double Size, bool Bold), FormattedText> _textCache = new();
     private readonly Dictionary<MetricId, double> _display = new();
+    private readonly Dictionary<MetricId, double> _animFrom = new();
+    private long _animStartTicks;
 
+    private const double AnimationMs = 300;
+
+    private static readonly bool NoAnimation = Environment.GetEnvironmentVariable("LITEMON_NO_ANIMATION") == "1";
+
+    private readonly DispatcherTimer _animTimer;
     private Snapshot _snapshot = Snapshot.Empty;
-    private bool _animating;
 
     public PanelView(SnapshotBus bus)
     {
         _bus = bus;
         _bus.Updated += OnSnapshotUpdated;
         Unloaded += (_, _) => _bus.Updated -= OnSnapshotUpdated;
+
+        // 用 30 fps 定时器而不是 CompositionTarget.Rendering：
+        // 后者在部分机器上退订后仍持续触发，导致整窗每秒重绘几十次。
+        _animTimer = new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(33),
+        };
+        _animTimer.Tick += OnFrame;
     }
 
     private static SolidColorBrush Frozen(Color color)
@@ -86,40 +102,53 @@ internal sealed class PanelView : FrameworkElement
             return;
         }
 
+        PerfCounters.AddSnapshot();
         _snapshot = snapshot;
 
-        if (!_animating)
+        if (NoAnimation)
         {
-            _animating = true;
-            CompositionTarget.Rendering += OnFrame;
+            foreach (var row in Rows)
+            {
+                var sample = snapshot.Get(row.Id);
+                _display[row.Id] = sample.Status == MetricStatus.Ok ? sample.Value : 0;
+            }
+
+            InvalidateVisual();
+            return;
+        }
+
+        foreach (var row in Rows)
+        {
+            _animFrom[row.Id] = _display.GetValueOrDefault(row.Id);
+        }
+
+        _animStartTicks = Stopwatch.GetTimestamp();
+
+        if (!_animTimer.IsEnabled)
+        {
+            _animTimer.Start();
         }
     }
 
     private void OnFrame(object? sender, EventArgs e)
     {
-        bool settled = true;
+        PerfCounters.AddAnimationFrame();
+
+        double elapsedMs = (Stopwatch.GetTimestamp() - _animStartTicks) * 1000.0 / Stopwatch.Frequency;
+        double progress = Math.Clamp(elapsedMs / AnimationMs, 0, 1);
+        double eased = 1 - Math.Pow(1 - progress, 3);   // easeOutCubic
 
         foreach (var row in Rows)
         {
             var sample = _snapshot.Get(row.Id);
             double target = sample.Status == MetricStatus.Ok ? sample.Value : 0;
-            double current = _display.GetValueOrDefault(row.Id);
-
-            if (Math.Abs(target - current) > 0.05)
-            {
-                _display[row.Id] = current + (target - current) * 0.35;
-                settled = false;
-            }
-            else
-            {
-                _display[row.Id] = target;
-            }
+            double from = _animFrom.GetValueOrDefault(row.Id);
+            _display[row.Id] = progress >= 1 ? target : from + (target - from) * eased;
         }
 
-        if (settled)
+        if (progress >= 1)
         {
-            _animating = false;
-            CompositionTarget.Rendering -= OnFrame;
+            _animTimer.Stop();
         }
 
         InvalidateVisual();
@@ -132,6 +161,7 @@ internal sealed class PanelView : FrameworkElement
 
     protected override void OnRender(DrawingContext dc)
     {
+        long start = Stopwatch.GetTimestamp();
         double width = ActualWidth;
         double height = ActualHeight;
 
@@ -154,6 +184,7 @@ internal sealed class PanelView : FrameworkElement
         }
 
         dc.DrawText(GetText("温度/风扇需管理员 · 右键退出", 10, false, MutedBrush), new Point(16, height - 20));
+        PerfCounters.AddRender(Stopwatch.GetTimestamp() - start);
     }
 
     private void DrawRow(DrawingContext dc, RowSpec row, double y, double rowHeight, double width)

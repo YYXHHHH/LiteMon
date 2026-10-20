@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using LiteMon.Core.Diagnostics;
 using LiteMon.Core.Metrics;
 using LiteMon.Core.Sensors;
 using LiteMon.Core.Snapshots;
@@ -104,7 +106,9 @@ public sealed class SamplingService : IDisposable
 
             try
             {
+                long start = Stopwatch.GetTimestamp();
                 provider.Poll(_builder, now);
+                PerfCounters.AddPoll(Stopwatch.GetTimestamp() - start);
             }
             catch (Exception)
             {
