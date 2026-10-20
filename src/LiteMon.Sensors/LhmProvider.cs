@@ -138,7 +138,7 @@ public sealed class LhmProvider : ISensorProvider
             return _acpiCelsius;
         }
 
-        _acpiNextAt = nowMs + 10_000;
+        _acpiNextAt = nowMs + 30_000;
 
         if (AcpiThermal.TryRead(out double celsius))
         {
