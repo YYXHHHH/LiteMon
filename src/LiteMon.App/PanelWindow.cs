@@ -34,6 +34,15 @@ public sealed class PanelWindow : Window
         KeyDown += OnKeyDown;
 
         var menu = new ContextMenu();
+
+        if (!ElevationHelper.IsElevated)
+        {
+            var elevate = new MenuItem { Header = "以管理员身份重启（读取内核温度）" };
+            elevate.Click += OnRestartElevated;
+            menu.Items.Add(elevate);
+            menu.Items.Add(new Separator());
+        }
+
         var exit = new MenuItem { Header = "退出 LiteMon" };
         exit.Click += (_, _) => Close();
         menu.Items.Add(exit);
@@ -63,6 +72,20 @@ public sealed class PanelWindow : Window
         catch (InvalidOperationException)
         {
             // 鼠标已释放时 DragMove 会抛异常，忽略
+        }
+    }
+
+    private void OnRestartElevated(object sender, RoutedEventArgs e)
+    {
+        MessageBoxResult result = MessageBox.Show(
+            "读取 CPU 内核温度需要管理员权限（加载签名驱动 PawnIO）。\n\n现在以管理员身份重启 LiteMon？",
+            "LiteMon",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (result == MessageBoxResult.Yes)
+        {
+            ElevationHelper.RestartElevated();
         }
     }
 

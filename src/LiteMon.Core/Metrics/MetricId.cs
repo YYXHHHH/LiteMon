@@ -12,6 +12,7 @@ public enum MetricId : short
     CpuPowerW = 103,
     CpuCoreMax = 104,
     CpuCoreAvg = 105,
+    CpuTempSource = 106,   // 1=LHM 内核, 2=ACPI 热区
 
     GpuLoad = 200,
     GpuTemp = 201,

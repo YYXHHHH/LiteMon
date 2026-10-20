@@ -1,5 +1,6 @@
 using LiteMon.Core.Metrics;
 using LiteMon.Core.Sensors;
+using LiteMon.Sensors.Interop;
 using LibreHardwareMonitor.Hardware;
 
 namespace LiteMon.Sensors;
@@ -11,13 +12,15 @@ namespace LiteMon.Sensors;
 public sealed class LhmProvider : ISensorProvider
 {
     private Computer? _computer;
+    private double? _acpiCelsius;
+    private long _acpiNextAt;
 
     public string Name => "lhm";
 
     public ProviderCadence Cadence => ProviderCadence.Medium;
 
     public ProviderCapabilities Capabilities { get; } = new(
-        new HashSet<MetricId> { MetricId.CpuTemp, MetricId.CpuPowerW, MetricId.FanRpm },
+        new HashSet<MetricId> { MetricId.CpuTemp, MetricId.CpuTempSource, MetricId.CpuPowerW, MetricId.FanRpm },
         RequiresAdmin: true,
         RequiresDriver: true);
 
@@ -70,7 +73,23 @@ public sealed class LhmProvider : ISensorProvider
             return;
         }
 
+        // 内核温度读不到时，回退到 ACPI 热区（非管理员可用），每 10 秒刷新一次
+        bool fromLhm = temperature is > 0;
+        if (!fromLhm)
+        {
+            temperature = TryAcpi(nowMs);
+        }
+
         Write(writer, MetricId.CpuTemp, temperature, 1, 120);
+
+        if (temperature is > 0)
+        {
+            writer.Write(MetricId.CpuTempSource, fromLhm ? 1 : 2);
+        }
+        else
+        {
+            writer.Write(MetricId.CpuTempSource, 0, MetricStatus.Unavailable);
+        }
         Write(writer, MetricId.CpuPowerW, power, 1, 500);
         Write(writer, MetricId.FanRpm, fan, 1, 20_000);
     }
@@ -110,6 +129,23 @@ public sealed class LhmProvider : ISensorProvider
         {
             ReadHardware(sub, ref temperature, ref power, ref fan);
         }
+    }
+
+    private double? TryAcpi(long nowMs)
+    {
+        if (nowMs < _acpiNextAt)
+        {
+            return _acpiCelsius;
+        }
+
+        _acpiNextAt = nowMs + 10_000;
+
+        if (AcpiThermal.TryRead(out double celsius))
+        {
+            _acpiCelsius = celsius;
+        }
+
+        return _acpiCelsius;
     }
 
     private static bool IsPackage(string name)

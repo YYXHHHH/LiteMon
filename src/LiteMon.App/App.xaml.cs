@@ -72,7 +72,7 @@ public partial class App : Application
             previousSnapshots = snapshots;
 
             using var process = Process.GetCurrentProcess();
-            string line = $"{DateTimeOffset.Now:HH:mm:ss} t={seconds:F0}s poll={pollMs:F2}ms render={renderMs:F2}ms frames={frameDelta} anim={animDelta} snaps={snapshotDelta} ws={process.WorkingSet64 / 1048576.0:F0}MB";
+            string line = $"{DateTimeOffset.Now:HH:mm:ss} t={seconds:F0}s admin={ElevationHelper.IsElevated} poll={pollMs:F2}ms render={renderMs:F2}ms frames={frameDelta} anim={animDelta} snaps={snapshotDelta} ws={process.WorkingSet64 / 1048576.0:F0}MB";
             File.AppendAllText(path, line + Environment.NewLine);
         };
 

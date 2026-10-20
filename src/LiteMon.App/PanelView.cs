@@ -183,8 +183,21 @@ internal sealed class PanelView : FrameworkElement
             y += rowHeight;
         }
 
-        dc.DrawText(GetText("温度/风扇需管理员 · 右键退出", 10, false, MutedBrush), new Point(16, height - 20));
+        dc.DrawText(GetText(FooterText(), 10, false, MutedBrush), new Point(16, height - 20));
         PerfCounters.AddRender(Stopwatch.GetTimestamp() - start);
+    }
+
+    private string FooterText()
+    {
+        var source = _snapshot.Get(MetricId.CpuTempSource);
+        if (source.Status != MetricStatus.Ok)
+        {
+            return "温度不可用 · 右键菜单";
+        }
+
+        return source.Value >= 1.5
+            ? "温度：ACPI 热区 · 右键启用内核温度"
+            : "温度：LHM 内核 · 右键菜单";
     }
 
     private void DrawRow(DrawingContext dc, RowSpec row, double y, double rowHeight, double width)
