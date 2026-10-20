@@ -35,8 +35,14 @@ public partial class App : Application
         _sampling = new SamplingService(providers, bus);
         _sampling.Start();
 
-        DeviceInfo devices = DeviceInfoCollector.Collect();
-        new PanelWindow(bus, devices).Show();
+        var window = new PanelWindow(bus, DeviceInfo.Empty);
+        window.Show();
+
+        // 型号查询走 WMI，可能 1–2 秒：先显示面板，后台补齐型号
+        _ = Task.Run(DeviceInfoCollector.Collect)
+            .ContinueWith(
+                task => Dispatcher.BeginInvoke(new Action(() => window.SetDevices(task.Result))),
+                TaskScheduler.Default);
         StartDiagnostics();
     }
 

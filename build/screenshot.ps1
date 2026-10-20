@@ -1,4 +1,4 @@
-param([string]$Out = "artifacts/panel.png", [string]$Title = "LiteMon")
+param([string]$Out = "artifacts/panel.png", [string]$Title = "LiteMon", [string]$ProcessName = "LiteMon")
 Add-Type -AssemblyName System.Drawing
 Add-Type @'
 using System;
@@ -16,7 +16,7 @@ public static class Win32 {
 }
 '@
 try { [Win32]::SetProcessDpiAwareness(2) | Out-Null } catch { [Win32]::SetProcessDPIAware() | Out-Null }
-$proc = Get-Process LiteMon.App -ErrorAction SilentlyContinue | Select-Object -First 1
+$proc = Get-Process $ProcessName -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $proc) { Write-Error "process not running"; exit 1 }
 $targetPid = $proc.Id
 $script:hwnd = [IntPtr]::Zero

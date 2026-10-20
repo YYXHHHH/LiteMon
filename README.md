@@ -28,6 +28,21 @@ dotnet run --project src/LiteMon.App -c Release
 
 已知问题：无托盘、无开机自启、无配置持久化；ACPI 温度为热区近似值，内核温度需管理员。
 
+## 直接用（已打包）
+
+| 包 | 体积 | 适用 |
+|---|---|---|
+| `release/LiteMon-portable-win-x64/`（zip 63.6 MB） | 149 MB | **自包含版**：不需要装 .NET，解压后双击 `LiteMon.exe` |
+| `release/LiteMon-lite-win-x64/`（zip 2.0 MB） | 4.9 MB | 轻量版：需要 .NET 10 桌面运行时 |
+
+启动约 4 秒（WPF 冷启动，已接受）。重新打包：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File build/publish.ps1
+```
+
+> `release/` 已加入 `.gitignore`，二进制不进仓库；`build/publish.ps1` 可随时重建。
+
 ## 一分钟版
 
 | 项 | 结论 |

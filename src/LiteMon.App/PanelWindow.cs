@@ -10,6 +10,10 @@ namespace LiteMon.App;
 /// <summary>无边框置顶面板：拖动移动、右上角 × 或 Esc 退出、右键菜单退出。</summary>
 public sealed class PanelWindow : Window
 {
+    private readonly PanelView _view;
+
+    public void SetDevices(DeviceInfo devices) => _view.SetDevices(devices);
+
     public PanelWindow(SnapshotBus bus, DeviceInfo devices)
     {
         Title = "LiteMon";
@@ -29,7 +33,8 @@ public sealed class PanelWindow : Window
 
         HorizontalContentAlignment = HorizontalAlignment.Stretch;
         VerticalContentAlignment = VerticalAlignment.Stretch;
-        Content = new PanelView(bus, devices);
+        _view = new PanelView(bus, devices);
+        Content = _view;
 
         MouseLeftButtonDown += OnMouseLeftButtonDown;
         KeyDown += OnKeyDown;

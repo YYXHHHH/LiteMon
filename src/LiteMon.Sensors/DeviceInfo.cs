@@ -6,7 +6,10 @@ using Microsoft.Win32;
 
 namespace LiteMon.Sensors;
 
-public sealed record DeviceInfo(string CpuName, string GpuName, string MemoryText, string DiskName, string NicName);
+public sealed record DeviceInfo(string CpuName, string GpuName, string MemoryText, string DiskName, string NicName)
+{
+    public static DeviceInfo Empty { get; } = new("CPU", "GPU", "内存", "磁盘", "网络");
+}
 
 /// <summary>启动时采集一次硬件型号，用于面板分组标题。</summary>
 public static class DeviceInfoCollector

@@ -45,7 +45,7 @@ internal sealed class PanelView : FrameworkElement
     private const double AnimationMs = 300;
 
     private readonly SnapshotBus _bus;
-    private readonly GroupSpec[] _groups;
+    private GroupSpec[] _groups;
     private readonly Dictionary<(string Text, double Size, bool Bold), FormattedText> _textCache = new();
     private readonly Dictionary<MetricId, double> _display = new();
     private readonly Dictionary<MetricId, double> _animFrom = new();
@@ -67,6 +67,12 @@ internal sealed class PanelView : FrameworkElement
             Interval = TimeSpan.FromMilliseconds(33),
         };
         _animTimer.Tick += OnFrame;
+    }
+
+    public void SetDevices(DeviceInfo devices)
+    {
+        _groups = BuildGroups(devices);
+        InvalidateVisual();
     }
 
     private static GroupSpec[] BuildGroups(DeviceInfo devices) =>
