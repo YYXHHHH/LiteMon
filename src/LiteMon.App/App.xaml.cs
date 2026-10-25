@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using LiteMon.Core.Diagnostics;
+using LiteMon.Core.Layout;
 using LiteMon.Core.Sensors;
 using LiteMon.Core.Snapshots;
 using LiteMon.Sensors;
@@ -44,7 +45,26 @@ public partial class App : Application
         };
         _sampling.Start();
 
-        _window = new PanelWindow(bus, DeviceInfo.Empty, _settings.RefreshIntervalSeconds, ApplyInterval);
+        var (left, top) = WindowPlacement.Clamp(
+            _settings.WindowLeft,
+            _settings.WindowTop,
+            PanelWindow.PanelWidth,
+            PanelWindow.PanelHeight,
+            SystemParameters.VirtualScreenLeft,
+            SystemParameters.VirtualScreenTop,
+            SystemParameters.VirtualScreenWidth,
+            SystemParameters.VirtualScreenHeight);
+
+        _window = new PanelWindow(
+            bus,
+            DeviceInfo.Empty,
+            _settings.RefreshIntervalSeconds,
+            ApplyInterval,
+            left,
+            top,
+            _settings.IsPinned,
+            OnPinnedChanged,
+            OnMoved);
         _window.Show();
 
         // 型号查询走 WMI，可能 1–2 秒：先显示面板，后台补齐型号
@@ -74,6 +94,26 @@ public partial class App : Application
         }
 
         return normalized;
+    }
+
+    /// <summary>图钉状态变化：立即持久化。</summary>
+    private void OnPinnedChanged(bool pinned)
+    {
+        _settings = _settings with { IsPinned = pinned };
+        if (!_store.TrySave(_settings))
+        {
+            Debug.WriteLine("LiteMon: 固定状态保存失败");
+        }
+    }
+
+    /// <summary>拖动结束：记录新位置。</summary>
+    private void OnMoved(double left, double top)
+    {
+        _settings = _settings with { WindowLeft = left, WindowTop = top };
+        if (!_store.TrySave(_settings))
+        {
+            Debug.WriteLine("LiteMon: 窗口位置保存失败");
+        }
     }
 
     private void StartDiagnostics()

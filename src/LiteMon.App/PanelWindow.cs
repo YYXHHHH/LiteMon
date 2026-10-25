@@ -14,24 +14,48 @@ namespace LiteMon.App;
 /// </summary>
 public sealed class PanelWindow : Window
 {
+    public const double PanelWidth = 340;
+    public const double PanelHeight = 560;
+
+    private const double HeaderHeight = 40;
+    private const double CloseZoneWidth = 44;
+    private const double PinZoneWidth = 28;
+
     private readonly PanelView _view;
     private readonly Func<double, double> _applyInterval;
+    private readonly Action<bool> _onPinnedChanged;
+    private readonly Action<double, double> _onMoved;
     private readonly List<MenuItem> _presetItems = [];
 
     private MenuItem? _customItem;
     private double _intervalSeconds;
+    private bool _isPinned;
 
-    public PanelWindow(SnapshotBus bus, DeviceInfo devices, double intervalSeconds, Func<double, double> applyInterval)
+    public PanelWindow(
+        SnapshotBus bus,
+        DeviceInfo devices,
+        double intervalSeconds,
+        Func<double, double> applyInterval,
+        double left,
+        double top,
+        bool isPinned,
+        Action<bool> onPinnedChanged,
+        Action<double, double> onMoved)
     {
         ArgumentNullException.ThrowIfNull(bus);
         ArgumentNullException.ThrowIfNull(applyInterval);
+        ArgumentNullException.ThrowIfNull(onPinnedChanged);
+        ArgumentNullException.ThrowIfNull(onMoved);
 
         _applyInterval = applyInterval;
+        _onPinnedChanged = onPinnedChanged;
+        _onMoved = onMoved;
+        _isPinned = isPinned;
         _intervalSeconds = RefreshInterval.Normalize(intervalSeconds);
 
         Title = "LiteMon";
-        Width = 340;
-        Height = 560;
+        Width = PanelWidth;
+        Height = PanelHeight;
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
         // 关闭 AllowsTransparency：分层窗口会让 WPF 退回软件渲染，CPU 会飙升到 10%+
@@ -41,16 +65,18 @@ public sealed class PanelWindow : Window
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.Manual;
 
-        Left = Math.Max(0, SystemParameters.WorkArea.Right - Width - 24);
-        Top = SystemParameters.WorkArea.Top + 24;
+        Left = left;
+        Top = top;
 
         HorizontalContentAlignment = HorizontalAlignment.Stretch;
         VerticalContentAlignment = VerticalAlignment.Stretch;
         _view = new PanelView(bus, devices);
         _view.SetRefreshInterval(_intervalSeconds);
+        _view.SetPinned(_isPinned);
         Content = _view;
 
         MouseLeftButtonDown += OnMouseLeftButtonDown;
+        MouseMove += OnMouseMove;
         KeyDown += OnKeyDown;
 
         var menu = new ContextMenu();
@@ -164,11 +190,29 @@ public sealed class PanelWindow : Window
         }
 
         Point position = e.GetPosition(this);
-        if (position.X > Width - 44 && position.Y < 40)
+
+        if (position.Y < HeaderHeight)
         {
-            Close();
-            return;
+            if (position.X > Width - CloseZoneWidth)
+            {
+                Close();
+                return;
+            }
+
+            if (position.X > Width - CloseZoneWidth - PinZoneWidth)
+            {
+                TogglePin();
+                return;
+            }
         }
+
+        if (_isPinned)
+        {
+            return;   // 固定：拖不动
+        }
+
+        double beforeLeft = Left;
+        double beforeTop = Top;
 
         try
         {
@@ -178,6 +222,32 @@ public sealed class PanelWindow : Window
         {
             // 鼠标已释放时 DragMove 会抛异常，忽略
         }
+
+        if (Math.Abs(Left - beforeLeft) > 0.5 || Math.Abs(Top - beforeTop) > 0.5)
+        {
+            _onMoved(Left, Top);
+        }
+    }
+
+    private void TogglePin()
+    {
+        _isPinned = !_isPinned;
+        _view.SetPinned(_isPinned);
+        _onPinnedChanged(_isPinned);
+
+        if (_isPinned)
+        {
+            // "钉在当前停留的位置"：固定瞬间把实际坐标也记下来
+            _onMoved(Left, Top);
+        }
+    }
+
+    private void OnMouseMove(object sender, MouseEventArgs e)
+    {
+        Point position = e.GetPosition(this);
+        bool onButton = position.Y < HeaderHeight && position.X > Width - CloseZoneWidth - PinZoneWidth;
+
+        Cursor = onButton ? Cursors.Hand : _isPinned ? Cursors.Arrow : Cursors.SizeAll;
     }
 
     private void OnRestartElevated(object sender, RoutedEventArgs e)

@@ -116,6 +116,53 @@ public class SettingsStoreTests
         }
     }
 
+    [Fact] // RI-17
+    public void SaveThenLoad_KeepsPinnedStateAndPosition()
+    {
+        string path = TempPath(out string directory);
+        try
+        {
+            var store = new SettingsStore(path);
+            Assert.True(store.TrySave(AppSettings.Default with
+            {
+                RefreshIntervalSeconds = 2,
+                IsPinned = true,
+                WindowLeft = 1200.5,
+                WindowTop = 64,
+            }));
+
+            var loaded = new SettingsStore(path).Load();
+            Assert.True(loaded.IsPinned);
+            Assert.Equal(1200.5, loaded.WindowLeft);
+            Assert.Equal(64, loaded.WindowTop);
+        }
+        finally
+        {
+            Delete(directory);
+        }
+    }
+
+    [Fact] // RI-18
+    public void Load_OldConfigWithoutWindowFields_UsesDefaults()
+    {
+        string path = TempPath(out string directory);
+        try
+        {
+            Directory.CreateDirectory(directory);
+            File.WriteAllText(path, "{\"version\":1,\"refreshIntervalSeconds\":5}");
+
+            var loaded = new SettingsStore(path).Load();
+            Assert.False(loaded.IsPinned);
+            Assert.Null(loaded.WindowLeft);
+            Assert.Null(loaded.WindowTop);
+            Assert.Equal(5, loaded.RefreshIntervalSeconds);
+        }
+        finally
+        {
+            Delete(directory);
+        }
+    }
+
     // 注意：不用 Path.GetTempPath()——在受限沙箱里子进程可能写不了系统临时目录。
     // 放在测试程序集目录下既沙箱友好，也保证测试互不干扰。
     private static string TempPath(out string directory)

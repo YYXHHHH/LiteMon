@@ -25,6 +25,7 @@ dotnet run --project src/LiteMon.App -c Release
 | 硬件型号 | 分组标题显示 CPU/GPU/内存/磁盘/网卡型号（如 Ryzen 7 8845H、RTX 4060 Laptop、Crucial 31.3 GB、YMTC PC411、MediaTek Wi-Fi 6E） |
 | 温度 | **CPU 70 ℃ 可读**（ACPI 热区回退，无需管理员）；内核温度需右键菜单提权（LHM/PawnIO） |
 | 交互 | 置顶、拖动、Esc/×/右键退出；右键菜单可切换刷新间隔（**选择持久化**到 `LiteMon.settings.json`） |
+| 固定悬浮窗 | 右上角**图钉**：点一下钉在当前屏幕位置（此时拖不动），再点解锁；位置与固定状态**重启后保留**，换分辨率/拔副屏自动回到可见区 |
 
 已知问题：无托盘、无开机自启；ACPI 温度为热区近似值，内核温度需管理员。
 

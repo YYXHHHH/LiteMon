@@ -39,8 +39,13 @@ internal sealed class PanelView : FrameworkElement
     private static readonly Brush LowBrush = Frozen(Color.FromRgb(0x4A, 0xDE, 0x80));
     private static readonly Brush MidBrush = Frozen(Color.FromRgb(0xFB, 0xBF, 0x24));
     private static readonly Brush HighBrush = Frozen(Color.FromRgb(0xF8, 0x71, 0x71));
+    private static readonly Brush PinBrush = Frozen(Color.FromRgb(0xA9, 0xB4, 0xC0));
+    private static readonly Brush PinActiveBrush = Frozen(Color.FromRgb(0x7F, 0xB2, 0xE5));
     private static readonly Pen BorderPen = CreatePen(Border);
     private static readonly Pen ClosePen = CreatePen(new SolidColorBrush(Color.FromRgb(0xA9, 0xB4, 0xC0)), 1.2);
+    private static readonly Pen PinPen = CreatePen(PinBrush, 1.2);
+    private static readonly Pen PinActivePen = CreatePen(PinActiveBrush, 1.2);
+    private static readonly Pen PinnedBorderPen = CreatePen(Frozen(Color.FromArgb(0x66, 0x7F, 0xB2, 0xE5)));
     private static readonly bool NoAnimation = Environment.GetEnvironmentVariable("LITEMON_NO_ANIMATION") == "1";
 
     private const double AnimationMs = 300;
@@ -48,6 +53,7 @@ internal sealed class PanelView : FrameworkElement
     private readonly SnapshotBus _bus;
     private GroupSpec[] _groups;
     private string _headerText = RefreshInterval.Describe(RefreshInterval.DefaultSeconds);
+    private bool _pinned;
     private readonly Dictionary<(string Text, double Size, bool Bold), FormattedText> _textCache = new();
     private readonly Dictionary<MetricId, double> _display = new();
     private readonly Dictionary<MetricId, double> _animFrom = new();
@@ -74,6 +80,18 @@ internal sealed class PanelView : FrameworkElement
     public void SetDevices(DeviceInfo devices)
     {
         _groups = BuildGroups(devices);
+        InvalidateVisual();
+    }
+
+    /// <summary>更新固定状态（影响图钉颜色与边框）。</summary>
+    public void SetPinned(bool pinned)
+    {
+        if (_pinned == pinned)
+        {
+            return;
+        }
+
+        _pinned = pinned;
         InvalidateVisual();
     }
 
@@ -211,10 +229,16 @@ internal sealed class PanelView : FrameworkElement
         double width = ActualWidth;
         double height = ActualHeight;
 
-        dc.DrawRectangle(Background, BorderPen, new Rect(0.5, 0.5, width - 1, height - 1));
+        dc.DrawRectangle(Background, _pinned ? PinnedBorderPen : BorderPen, new Rect(0.5, 0.5, width - 1, height - 1));
 
         dc.DrawText(GetText("LiteMon", 15, true, ValueBrush), new Point(16, 11));
         dc.DrawText(GetText(_headerText, 10, false, MutedBrush, width - 88 - 40), new Point(88, 16));
+
+        // 图钉：实心圆 + 竖针，固定时用强调色
+        double pinX = width - 58;
+        dc.DrawEllipse(_pinned ? PinActiveBrush : null, _pinned ? PinActivePen : PinPen, new Point(pinX, 16.5), 3, 3);
+        dc.DrawLine(_pinned ? PinActivePen : PinPen, new Point(pinX, 19.5), new Point(pinX, 26));
+
         dc.DrawLine(ClosePen, new Point(width - 28, 15), new Point(width - 18, 25));
         dc.DrawLine(ClosePen, new Point(width - 18, 15), new Point(width - 28, 25));
 
