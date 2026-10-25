@@ -83,4 +83,26 @@ public class SnapshotBuilderTests
 
         Assert.Equal(MetricStatus.Unavailable, sample.Status);
     }
+
+    [Fact] // SNAP-09
+    public void Build_WithLargerStaleThreshold_KeepsOldValueOk()
+    {
+        var builder = new SnapshotBuilder();
+        builder.Begin(1_000);
+        builder.Write(MetricId.CpuLoad, 50);
+
+        builder.Begin(21_000);   // 20 秒后
+
+        Assert.Equal(MetricStatus.Ok, builder.Build(30_000).Get(MetricId.CpuLoad).Status);
+        Assert.Equal(MetricStatus.Stale, builder.Build(12_000).Get(MetricId.CpuLoad).Status);
+    }
+
+    [Fact] // SNAP-10
+    public void Build_RejectsNonPositiveThreshold()
+    {
+        var builder = new SnapshotBuilder();
+        builder.Begin(1_000);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => builder.Build(0));
+    }
 }

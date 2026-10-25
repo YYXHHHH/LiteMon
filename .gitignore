@@ -13,3 +13,8 @@ spike/**/obj/
 
 # 工具临时文件
 .dsh-ops-*
+
+# 用户设置（便携版放在 exe 旁边）
+LiteMon.settings.json
+LiteMon.settings.json.tmp
+LiteMon.settings.json.bad

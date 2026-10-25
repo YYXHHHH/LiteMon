@@ -34,6 +34,10 @@ if (-not $SkipLite) { Publish-App "LiteMon-lite-$Runtime" $false $true }
 
 foreach ($dir in Get-ChildItem $release -Directory) {
     Copy-Item (Join-Path $root "build/README-portable.txt") (Join-Path $dir.FullName "README.txt") -Force
+    # 不要把开发机上的用户设置打进发布包
+    Remove-Item (Join-Path $dir.FullName "LiteMon.settings.json") -Force -ErrorAction SilentlyContinue
+    Remove-Item (Join-Path $dir.FullName "LiteMon.settings.json.tmp") -Force -ErrorAction SilentlyContinue
+    Remove-Item (Join-Path $dir.FullName "LiteMon.settings.json.bad") -Force -ErrorAction SilentlyContinue
     $zip = "$($dir.FullName).zip"
     if (Test-Path $zip) { Remove-Item $zip -Force }
     Compress-Archive -Path (Join-Path $dir.FullName "*") -DestinationPath $zip -CompressionLevel Optimal

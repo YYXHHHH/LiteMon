@@ -6,19 +6,25 @@ using LiteMon.Core.Diagnostics;
 using LiteMon.Core.Sensors;
 using LiteMon.Core.Snapshots;
 using LiteMon.Sensors;
+using LiteMon.Settings;
 
 namespace LiteMon.App;
 
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable", Justification = "WPF Application 的清理在 OnExit 中完成")]
 public partial class App : Application
 {
+    private readonly SettingsStore _store = new();
+    private AppSettings _settings = AppSettings.Default;
     private SamplingService? _sampling;
+    private PanelWindow? _window;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
         DispatcherUnhandledException += OnUnhandledException;
+
+        _settings = _store.Load();
 
         var bus = new SnapshotBus();
         ISensorProvider[] providers =
@@ -32,21 +38,45 @@ public partial class App : Application
             new UptimeProvider(),
         ];
 
-        _sampling = new SamplingService(providers, bus);
+        _sampling = new SamplingService(providers, bus)
+        {
+            Interval = _settings.Interval,
+        };
         _sampling.Start();
 
-        var window = new PanelWindow(bus, DeviceInfo.Empty);
-        window.Show();
+        _window = new PanelWindow(bus, DeviceInfo.Empty, _settings.RefreshIntervalSeconds, ApplyInterval);
+        _window.Show();
 
         // 型号查询走 WMI，可能 1–2 秒：先显示面板，后台补齐型号
         _ = Task.Run(DeviceInfoCollector.Collect)
             .ContinueWith(
-                task => Dispatcher.BeginInvoke(new Action(() => window.SetDevices(task.Result))),
+                task => Dispatcher.BeginInvoke(new Action(() => _window?.SetDevices(task.Result))),
                 TaskScheduler.Default);
         StartDiagnostics();
     }
 
-    private static void StartDiagnostics()
+    /// <summary>
+    /// 应用新的刷新间隔：采样器立即重排 + 持久化，返回实际生效值。
+    /// 这是全项目唯一的"改间隔"入口，菜单与对话框都只能走这里。
+    /// </summary>
+    private double ApplyInterval(double seconds)
+    {
+        double normalized = RefreshInterval.Normalize(seconds);
+        if (_sampling is not null)
+        {
+            _sampling.Interval = TimeSpan.FromSeconds(normalized);
+        }
+
+        _settings = _settings with { RefreshIntervalSeconds = normalized };
+        if (!_store.TrySave(_settings))
+        {
+            Debug.WriteLine("LiteMon: 设置保存失败（只影响下次启动）");
+        }
+
+        return normalized;
+    }
+
+    private void StartDiagnostics()
     {
         if (Environment.GetEnvironmentVariable("LITEMON_DIAG") != "1")
         {
@@ -79,7 +109,7 @@ public partial class App : Application
             previousSnapshots = snapshots;
 
             using var process = Process.GetCurrentProcess();
-            string line = $"{DateTimeOffset.Now:HH:mm:ss} t={seconds:F0}s admin={ElevationHelper.IsElevated} poll={pollMs:F2}ms render={renderMs:F2}ms frames={frameDelta} anim={animDelta} snaps={snapshotDelta} ws={process.WorkingSet64 / 1048576.0:F0}MB";
+            string line = $"{DateTimeOffset.Now:HH:mm:ss} t={seconds:F0}s admin={ElevationHelper.IsElevated} interval={_settings.RefreshIntervalSeconds:0}s poll={pollMs:F2}ms render={renderMs:F2}ms frames={frameDelta} anim={animDelta} snaps={snapshotDelta} ws={process.WorkingSet64 / 1048576.0:F0}MB";
             File.AppendAllText(path, line + Environment.NewLine);
         };
 

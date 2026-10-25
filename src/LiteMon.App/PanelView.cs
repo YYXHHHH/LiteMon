@@ -5,6 +5,7 @@ using System.Windows.Threading;
 using LiteMon.Core.Diagnostics;
 using LiteMon.Core.Formatting;
 using LiteMon.Core.Metrics;
+using LiteMon.Core.Sensors;
 using LiteMon.Core.Snapshots;
 using LiteMon.Sensors;
 
@@ -46,6 +47,7 @@ internal sealed class PanelView : FrameworkElement
 
     private readonly SnapshotBus _bus;
     private GroupSpec[] _groups;
+    private string _headerText = RefreshInterval.Describe(RefreshInterval.DefaultSeconds);
     private readonly Dictionary<(string Text, double Size, bool Bold), FormattedText> _textCache = new();
     private readonly Dictionary<MetricId, double> _display = new();
     private readonly Dictionary<MetricId, double> _animFrom = new();
@@ -72,6 +74,19 @@ internal sealed class PanelView : FrameworkElement
     public void SetDevices(DeviceInfo devices)
     {
         _groups = BuildGroups(devices);
+        InvalidateVisual();
+    }
+
+    /// <summary>更新头部"每 N 秒刷新"文案；值有变化才重绘。</summary>
+    public void SetRefreshInterval(double seconds)
+    {
+        string text = RefreshInterval.Describe(seconds);
+        if (string.Equals(text, _headerText, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _headerText = text;
         InvalidateVisual();
     }
 
@@ -199,7 +214,7 @@ internal sealed class PanelView : FrameworkElement
         dc.DrawRectangle(Background, BorderPen, new Rect(0.5, 0.5, width - 1, height - 1));
 
         dc.DrawText(GetText("LiteMon", 15, true, ValueBrush), new Point(16, 11));
-        dc.DrawText(GetText("每 1 秒刷新", 10, false, MutedBrush), new Point(88, 16));
+        dc.DrawText(GetText(_headerText, 10, false, MutedBrush, width - 88 - 40), new Point(88, 16));
         dc.DrawLine(ClosePen, new Point(width - 28, 15), new Point(width - 18, 25));
         dc.DrawLine(ClosePen, new Point(width - 18, 15), new Point(width - 28, 25));
 

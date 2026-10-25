@@ -8,7 +8,7 @@ namespace LiteMon.Core.Metrics;
 /// </summary>
 public sealed class SnapshotBuilder : IMetricWriter
 {
-    /// <summary>超过该时长未更新的 Ok 值会被标记为 Stale（必须大于最慢采样档 10 s）。</summary>
+    /// <summary>默认陈旧阈值，必须大于最慢采样档 10 s；采样器会按刷新间隔放大后传入。</summary>
     public const long StaleAfterMs = 12_000;
 
     private readonly MetricSample[] _slots = new MetricSample[(int)MetricId.Count];
@@ -53,15 +53,26 @@ public sealed class SnapshotBuilder : IMetricWriter
         }
     }
 
-    /// <summary>构建不可变快照：复制槽位，并把超过 <see cref="StaleAfterMs"/> 的 Ok 值标为 Stale。</summary>
-    public Snapshot Build()
+    /// <summary>构建不可变快照：使用默认陈旧阈值 <see cref="StaleAfterMs"/>。</summary>
+    public Snapshot Build() => Build(StaleAfterMs);
+
+    /// <summary>
+    /// 构建不可变快照：把超过 <paramref name="staleAfterMs"/> 未更新的 Ok 值标为 Stale。
+    /// 采样器会传入 max(默认值, 3 × 刷新间隔)，避免用户把间隔调大后误判过期。
+    /// </summary>
+    public Snapshot Build(long staleAfterMs)
     {
+        if (staleAfterMs <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(staleAfterMs), "陈旧阈值必须为正数。");
+        }
+
         var copy = (MetricSample[])_slots.Clone();
 
         for (int i = 0; i < copy.Length; i++)
         {
             var sample = copy[i];
-            if (sample.Status == MetricStatus.Ok && _nowMs - sample.TimestampMs > StaleAfterMs)
+            if (sample.Status == MetricStatus.Ok && _nowMs - sample.TimestampMs > staleAfterMs)
             {
                 copy[i] = sample with { Status = MetricStatus.Stale };
             }
