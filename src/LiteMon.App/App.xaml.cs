@@ -18,6 +18,8 @@ public partial class App : Application
     private readonly SettingsStore _store = new();
     private AppSettings _settings = AppSettings.Default;
     private SamplingService? _sampling;
+    private SnapshotBus? _bus;
+    private DeviceInfo _devices = DeviceInfo.Empty;
     private PanelWindow? _window;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -29,6 +31,7 @@ public partial class App : Application
         _settings = _store.Load();
 
         var bus = new SnapshotBus();
+        _bus = bus;
         ISensorProvider[] providers =
         [
             new CpuProvider(),
@@ -60,24 +63,17 @@ public partial class App : Application
             SystemParameters.VirtualScreenWidth,
             SystemParameters.VirtualScreenHeight);
 
-        _window = new PanelWindow(
-            bus,
-            DeviceInfo.Empty,
-            _settings.RefreshIntervalSeconds,
-            ApplyInterval,
-            appearance,
-            left,
-            top,
-            _settings.IsPinned,
-            OnPinnedChanged,
-            OnMoved,
-            ApplyAppearance);
+        _window = CreateWindow(appearance, left, top);
         _window.Show();
 
         // 型号查询走 WMI，可能 1–2 秒：先显示面板，后台补齐型号
         _ = Task.Run(DeviceInfoCollector.Collect)
             .ContinueWith(
-                task => Dispatcher.BeginInvoke(new Action(() => _window?.SetDevices(task.Result))),
+                task => Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    _devices = task.Result;
+                    _window?.SetDevices(_devices);
+                })),
                 TaskScheduler.Default);
         StartDiagnostics();
     }
@@ -103,7 +99,26 @@ public partial class App : Application
         return normalized;
     }
 
-    /// <summary>应用外观：归一化 → 持久化 → 返回实际生效值（窗口负责视觉）。</summary>
+    private PanelWindow CreateWindow(AppearanceSettings appearance, double left, double top)
+    {
+        return new PanelWindow(
+            _bus!,
+            _devices,
+            _settings.RefreshIntervalSeconds,
+            ApplyInterval,
+            appearance,
+            left,
+            top,
+            _settings.IsPinned,
+            OnPinnedChanged,
+            OnMoved,
+            ApplyAppearance,
+            appearance.IsTransparent);
+    }
+
+    /// <summary>
+    /// 应用外观：归一化 → 持久化 → 按需重建窗口（透明/不透明对应分层/非分层，创建后不可切换）。
+    /// </summary>
     private AppearanceSettings ApplyAppearance(AppearanceSettings appearance)
     {
         AppearanceSettings normalized = appearance.Normalized();
@@ -114,6 +129,23 @@ public partial class App : Application
             Debug.WriteLine("LiteMon: 外观设置保存失败");
         }
 
+        if (_window is null)
+        {
+            return normalized;
+        }
+
+        if (_window.IsLayered == normalized.IsTransparent)
+        {
+            _window.ApplyAppearance(normalized);
+            return normalized;
+        }
+
+        // 先建新窗口再关旧的，避免"最后一个窗口关闭"导致程序退出
+        PanelWindow previous = _window;
+        _window = CreateWindow(normalized, previous.Left, previous.Top);
+        _window.Show();
+        _window.SetDevices(_devices);
+        previous.Close();
         return normalized;
     }
 

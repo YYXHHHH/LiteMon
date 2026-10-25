@@ -53,7 +53,8 @@ public sealed class PanelWindow : Window
         bool isPinned,
         Action<bool> onPinnedChanged,
         Action<double, double> onMoved,
-        Func<AppearanceSettings, AppearanceSettings> applyAppearance)
+        Func<AppearanceSettings, AppearanceSettings> applyAppearance,
+        bool layered)
     {
         ArgumentNullException.ThrowIfNull(bus);
         ArgumentNullException.ThrowIfNull(applyInterval);
@@ -72,8 +73,9 @@ public sealed class PanelWindow : Window
         Title = "LiteMon";
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
-        // 关闭 AllowsTransparency：分层窗口会让 WPF 退回软件渲染（透明改走 DWM，见 WindowBackdrop）
-        AllowsTransparency = false;
+        // 只有需要"真的透出桌面"时才启用分层窗口（代价是软件渲染，所以默认关闭、且透明时强制无动画）
+        IsLayered = layered;
+        AllowsTransparency = layered;
         Topmost = true;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.Manual;
@@ -97,7 +99,6 @@ public sealed class PanelWindow : Window
         MouseLeftButtonDown += OnMouseLeftButtonDown;
         MouseMove += OnMouseMove;
         KeyDown += OnKeyDown;
-        SourceInitialized += (_, _) => ApplyBackdrop();
 
         var menu = new ContextMenu();
         menu.Items.Add(BuildIntervalMenu());
@@ -149,44 +150,17 @@ public sealed class PanelWindow : Window
 
         _view.SetAppearance(normalized);
         ApplyBackground();
-        ApplyBackdrop();
         UpdateAppearanceChecks();
     }
 
+    /// <summary>当前窗口是否为分层窗口（透明模式）。切换透明度需要由 App 重建窗口。</summary>
+    public bool IsLayered { get; }
+
     private void ApplyBackground()
     {
-        if (!_appearance.IsTransparent)
-        {
-            Background = new SolidColorBrush(Color.FromRgb(0x0B, 0x0E, 0x14));
-            return;
-        }
-
-        byte alpha = (byte)Math.Round(_appearance.OpacityPercent * 255 / 100.0, MidpointRounding.AwayFromZero);
-        Background = new SolidColorBrush(Color.FromArgb(alpha, 0x0B, 0x0E, 0x14));
-    }
-
-    private void ApplyBackdrop()
-    {
-        if (IsLoaded is false && new System.Windows.Interop.WindowInteropHelper(this).Handle == IntPtr.Zero)
-        {
-            return;
-        }
-
-        if (!_appearance.IsTransparent)
-        {
-            WindowBackdrop.Disable(this);
-            return;
-        }
-
-        if (WindowBackdrop.TryEnable(this))
-        {
-            return;
-        }
-
-        // 系统不支持：回退不透明并让 App 落盘 100%
-        _opacityRoot!.IsEnabled = false;
-        _opacityRoot.Header = "透明度（当前系统不支持）";
-        _ = _applyAppearance(_appearance with { OpacityPercent = 100 });
+        // 分层窗口必须让窗口自身完全透明，由 PanelView 画带 alpha 的背景；
+        // 非分层窗口则用不透明底色兜底。
+        Background = IsLayered ? Brushes.Transparent : new SolidColorBrush(Color.FromRgb(0x0B, 0x0E, 0x14));
     }
 
     private MenuItem BuildIntervalMenu()
@@ -287,8 +261,8 @@ public sealed class PanelWindow : Window
 
     private void OnAppearancePicked(AppearanceSettings appearance)
     {
-        AppearanceSettings applied = _applyAppearance(appearance);
-        ApplyAppearance(applied);
+        // App 负责归一化、持久化以及必要时重建窗口（透明/不透明切换）
+        _ = _applyAppearance(appearance);
     }
 
     private void UpdateAppearanceChecks()
@@ -316,8 +290,12 @@ public sealed class PanelWindow : Window
         {
             _animSmooth.IsChecked = _appearance.SmoothAnimation;
             _animSnap.IsChecked = !_appearance.SmoothAnimation;
-            _animSmooth.IsEnabled = _appearance.Layout == PanelLayout.Detailed;
-            _animSnap.IsEnabled = _appearance.Layout == PanelLayout.Detailed;
+            bool animationAllowed = _appearance.Layout == PanelLayout.Detailed && !_appearance.IsTransparent;
+            _animSmooth.IsEnabled = animationAllowed;
+            _animSnap.IsEnabled = animationAllowed;
+            _animSmooth.Header = _appearance.IsTransparent
+                ? "平滑过渡（透明模式不可用）"
+                : "平滑过渡（较费 CPU）";
         }
 
         foreach (var (group, item) in _groupItems)

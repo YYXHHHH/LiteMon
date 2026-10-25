@@ -186,7 +186,8 @@ public class SettingsStoreTests
             Assert.Equal(PanelLayout.Compact, loaded.Appearance.Layout);
             Assert.Equal(75, loaded.Appearance.OpacityPercent);
             Assert.False(loaded.Appearance.ShowBars);
-            Assert.True(loaded.Appearance.SmoothAnimation);
+            // 75% 透明会强制关闭动画（分层窗口软件渲染）
+            Assert.False(loaded.Appearance.SmoothAnimation);
             Assert.Equal(PanelGroup.Cpu | PanelGroup.Gpu, loaded.Appearance.VisibleGroups);
         }
         finally

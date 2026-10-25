@@ -535,12 +535,19 @@ internal sealed class PanelView : FrameworkElement
             return;
         }
 
-        // 用 4 次偏移绘制模拟 1px 黑边：比"几何描边"便宜得多（不触发轮廓三角化）
+        // 8 方向 1px 黑晕 + 不透明白字：文字本身始终 100% 不透明，透明的是面板底色
         FormattedText shadow = GetText(text, size, bold, ShadowBrush, maxWidth);
-        dc.DrawText(shadow, new Point(origin.X - 1, origin.Y));
-        dc.DrawText(shadow, new Point(origin.X + 1, origin.Y));
-        dc.DrawText(shadow, new Point(origin.X, origin.Y - 1));
-        dc.DrawText(shadow, new Point(origin.X, origin.Y + 1));
+        for (int dy = -1; dy <= 1; dy++)
+        {
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                if (dx != 0 || dy != 0)
+                {
+                    dc.DrawText(shadow, new Point(origin.X + dx, origin.Y + dy));
+                }
+            }
+        }
+
         dc.DrawText(GetText(text, size, bold, ShadowBodyBrush, maxWidth), origin);
     }
 

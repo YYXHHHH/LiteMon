@@ -58,13 +58,15 @@ public sealed record AppearanceSettings
     {
         int opacity = NormalizeOpacity(OpacityPercent);
         bool bars = Layout == PanelLayout.Compact ? false : ShowBars;
+        // 透明窗口是分层窗口（软件渲染），动画会成倍放大开销：强制关闭
+        bool animation = opacity < MaxOpacity ? false : SmoothAnimation;
         PanelGroup groups = VisibleGroups & PanelGroup.All;
         if (groups == PanelGroup.None)
         {
             groups = PanelGroup.All;   // 防呆：不允许一个部件都不显示
         }
 
-        return this with { OpacityPercent = opacity, ShowBars = bars, VisibleGroups = groups };
+        return this with { OpacityPercent = opacity, ShowBars = bars, SmoothAnimation = animation, VisibleGroups = groups };
     }
 
     /// <summary>把透明度吸附到 5 的倍数并夹在 [45, 100]。</summary>

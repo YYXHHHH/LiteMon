@@ -46,6 +46,17 @@ public class AppearanceTests
         Assert.False(defaults.IsTransparent);
     }
 
+    [Fact] // RI-49
+    public void Transparent_ForcesAnimationOff()
+    {
+        var normalized = new AppearanceSettings { OpacityPercent = 45, SmoothAnimation = true }.Normalized();
+        Assert.False(normalized.SmoothAnimation);
+        Assert.True(normalized.IsTransparent);
+
+        var opaque = new AppearanceSettings { OpacityPercent = 100, SmoothAnimation = true }.Normalized();
+        Assert.True(opaque.SmoothAnimation);
+    }
+
     [Fact] // RI-45
     public void IsVisible_UsesBitmask()
     {
