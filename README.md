@@ -33,6 +33,8 @@
 |---|---|
 | ![透明](docs/images/panel-transparent.png) | ![紧凑](docs/images/panel-compact.png) |
 
+> 截图中的硬件型号已打码处理。
+
 ## 环境要求
 
 - Windows 10 1809+ / Windows 11（x64）
