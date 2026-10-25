@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using LiteMon.Core.Appearance;
 using LiteMon.Core.Diagnostics;
 using LiteMon.Core.Layout;
 using LiteMon.Core.Sensors;
@@ -45,11 +46,15 @@ public partial class App : Application
         };
         _sampling.Start();
 
+        AppearanceSettings appearance = _settings.Appearance.Normalized();
+        (double panelWidth, double panelHeight) = PanelMetrics.GetSize(appearance.Layout, appearance.VisibleGroups);
+        panelWidth = Math.Min(panelWidth, SystemParameters.VirtualScreenWidth - 24);
+
         var (left, top) = WindowPlacement.Clamp(
             _settings.WindowLeft,
             _settings.WindowTop,
-            PanelWindow.PanelWidth,
-            PanelWindow.PanelHeight,
+            panelWidth,
+            panelHeight,
             SystemParameters.VirtualScreenLeft,
             SystemParameters.VirtualScreenTop,
             SystemParameters.VirtualScreenWidth,
@@ -60,11 +65,13 @@ public partial class App : Application
             DeviceInfo.Empty,
             _settings.RefreshIntervalSeconds,
             ApplyInterval,
+            appearance,
             left,
             top,
             _settings.IsPinned,
             OnPinnedChanged,
-            OnMoved);
+            OnMoved,
+            ApplyAppearance);
         _window.Show();
 
         // 型号查询走 WMI，可能 1–2 秒：先显示面板，后台补齐型号
@@ -91,6 +98,20 @@ public partial class App : Application
         if (!_store.TrySave(_settings))
         {
             Debug.WriteLine("LiteMon: 设置保存失败（只影响下次启动）");
+        }
+
+        return normalized;
+    }
+
+    /// <summary>应用外观：归一化 → 持久化 → 返回实际生效值（窗口负责视觉）。</summary>
+    private AppearanceSettings ApplyAppearance(AppearanceSettings appearance)
+    {
+        AppearanceSettings normalized = appearance.Normalized();
+        _settings = _settings with { Appearance = normalized };
+
+        if (!_store.TrySave(_settings))
+        {
+            Debug.WriteLine("LiteMon: 外观设置保存失败");
         }
 
         return normalized;

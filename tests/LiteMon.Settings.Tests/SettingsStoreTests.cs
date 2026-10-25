@@ -1,3 +1,4 @@
+using LiteMon.Core.Appearance;
 using LiteMon.Settings;
 
 namespace LiteMon.Settings.Tests;
@@ -29,7 +30,7 @@ public class SettingsStoreTests
 
             var loaded = new SettingsStore(path).Load();
             Assert.Equal(5, loaded.RefreshIntervalSeconds);
-            Assert.Equal(1, loaded.Version);
+            Assert.Equal(AppSettings.CurrentVersion, loaded.Version);
         }
         finally
         {
@@ -156,6 +157,59 @@ public class SettingsStoreTests
             Assert.Null(loaded.WindowLeft);
             Assert.Null(loaded.WindowTop);
             Assert.Equal(5, loaded.RefreshIntervalSeconds);
+        }
+        finally
+        {
+            Delete(directory);
+        }
+    }
+
+    [Fact] // RI-19
+    public void SaveThenLoad_KeepsAppearance()
+    {
+        string path = TempPath(out string directory);
+        try
+        {
+            var store = new SettingsStore(path);
+            var appearance = new AppearanceSettings
+            {
+                Layout = PanelLayout.Compact,
+                OpacityPercent = 75,
+                ShowBars = false,
+                SmoothAnimation = true,
+                VisibleGroups = PanelGroup.Cpu | PanelGroup.Gpu,
+            };
+
+            Assert.True(store.TrySave(AppSettings.Default with { Appearance = appearance }));
+
+            var loaded = new SettingsStore(path).Load();
+            Assert.Equal(PanelLayout.Compact, loaded.Appearance.Layout);
+            Assert.Equal(75, loaded.Appearance.OpacityPercent);
+            Assert.False(loaded.Appearance.ShowBars);
+            Assert.True(loaded.Appearance.SmoothAnimation);
+            Assert.Equal(PanelGroup.Cpu | PanelGroup.Gpu, loaded.Appearance.VisibleGroups);
+        }
+        finally
+        {
+            Delete(directory);
+        }
+    }
+
+    [Fact] // RI-20
+    public void Load_WithoutAppearance_UsesDefaultAppearance()
+    {
+        string path = TempPath(out string directory);
+        try
+        {
+            Directory.CreateDirectory(directory);
+            File.WriteAllText(path, "{\"version\":1,\"refreshIntervalSeconds\":5}");
+
+            var appearance = new SettingsStore(path).Load().Appearance;
+            Assert.Equal(PanelLayout.Detailed, appearance.Layout);
+            Assert.Equal(100, appearance.OpacityPercent);
+            Assert.True(appearance.ShowBars);
+            Assert.False(appearance.SmoothAnimation);
+            Assert.Equal(PanelGroup.All, appearance.VisibleGroups);
         }
         finally
         {

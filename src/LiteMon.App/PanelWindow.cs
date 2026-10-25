@@ -3,6 +3,8 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using LiteMon.Core.Appearance;
+using LiteMon.Core.Layout;
 using LiteMon.Core.Sensors;
 using LiteMon.Core.Snapshots;
 using LiteMon.Sensors;
@@ -10,61 +12,75 @@ using LiteMon.Sensors;
 namespace LiteMon.App;
 
 /// <summary>
-/// 无边框置顶面板：拖动移动、右上角 × 或 Esc 退出、右键菜单切换刷新间隔/提权/退出。
+/// 无边框置顶面板：拖动、图钉固定、右键菜单（刷新间隔 / 外观 / 提权 / 退出）。
+/// 尺寸由布局与可见部件决定，切换后自动收敛到屏幕内。
 /// </summary>
 public sealed class PanelWindow : Window
 {
-    public const double PanelWidth = 340;
-    public const double PanelHeight = 560;
-
     private const double HeaderHeight = 40;
     private const double CloseZoneWidth = 44;
     private const double PinZoneWidth = 28;
 
     private readonly PanelView _view;
     private readonly Func<double, double> _applyInterval;
+    private readonly Func<AppearanceSettings, AppearanceSettings> _applyAppearance;
     private readonly Action<bool> _onPinnedChanged;
     private readonly Action<double, double> _onMoved;
     private readonly List<MenuItem> _presetItems = [];
+    private readonly List<MenuItem> _opacityItems = [];
+    private readonly Dictionary<PanelGroup, MenuItem> _groupItems = [];
 
     private MenuItem? _customItem;
+    private MenuItem? _layoutDetailed;
+    private MenuItem? _layoutCompact;
+    private MenuItem? _barsShow;
+    private MenuItem? _barsHide;
+    private MenuItem? _animSmooth;
+    private MenuItem? _animSnap;
+    private MenuItem? _opacityRoot;
     private double _intervalSeconds;
     private bool _isPinned;
+    private AppearanceSettings _appearance;
 
     public PanelWindow(
         SnapshotBus bus,
         DeviceInfo devices,
         double intervalSeconds,
         Func<double, double> applyInterval,
+        AppearanceSettings appearance,
         double left,
         double top,
         bool isPinned,
         Action<bool> onPinnedChanged,
-        Action<double, double> onMoved)
+        Action<double, double> onMoved,
+        Func<AppearanceSettings, AppearanceSettings> applyAppearance)
     {
         ArgumentNullException.ThrowIfNull(bus);
         ArgumentNullException.ThrowIfNull(applyInterval);
         ArgumentNullException.ThrowIfNull(onPinnedChanged);
         ArgumentNullException.ThrowIfNull(onMoved);
+        ArgumentNullException.ThrowIfNull(applyAppearance);
 
         _applyInterval = applyInterval;
+        _applyAppearance = applyAppearance;
         _onPinnedChanged = onPinnedChanged;
         _onMoved = onMoved;
         _isPinned = isPinned;
+        _appearance = appearance.Normalized();
         _intervalSeconds = RefreshInterval.Normalize(intervalSeconds);
 
         Title = "LiteMon";
-        Width = PanelWidth;
-        Height = PanelHeight;
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
-        // 关闭 AllowsTransparency：分层窗口会让 WPF 退回软件渲染，CPU 会飙升到 10%+
+        // 关闭 AllowsTransparency：分层窗口会让 WPF 退回软件渲染（透明改走 DWM，见 WindowBackdrop）
         AllowsTransparency = false;
-        Background = new SolidColorBrush(Color.FromRgb(0x0B, 0x0E, 0x14));
         Topmost = true;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.Manual;
 
+        (double width, double height) = PanelMetrics.GetSize(_appearance.Layout, _appearance.VisibleGroups);
+        Width = width;
+        Height = height;
         Left = left;
         Top = top;
 
@@ -73,14 +89,19 @@ public sealed class PanelWindow : Window
         _view = new PanelView(bus, devices);
         _view.SetRefreshInterval(_intervalSeconds);
         _view.SetPinned(_isPinned);
+        _view.SetAppearance(_appearance);
         Content = _view;
+
+        ApplyBackground();
 
         MouseLeftButtonDown += OnMouseLeftButtonDown;
         MouseMove += OnMouseMove;
         KeyDown += OnKeyDown;
+        SourceInitialized += (_, _) => ApplyBackdrop();
 
         var menu = new ContextMenu();
         menu.Items.Add(BuildIntervalMenu());
+        menu.Items.Add(BuildAppearanceMenu());
 
         if (!ElevationHelper.IsElevated)
         {
@@ -101,6 +122,72 @@ public sealed class PanelWindow : Window
     }
 
     public void SetDevices(DeviceInfo devices) => _view.SetDevices(devices);
+
+    /// <summary>由 App 调用：应用外观（尺寸、背景、透明、视图、菜单勾选）。</summary>
+    public void ApplyAppearance(AppearanceSettings appearance)
+    {
+        AppearanceSettings normalized = appearance.Normalized();
+        _appearance = normalized;
+
+        (double width, double height) = PanelMetrics.GetSize(normalized.Layout, normalized.VisibleGroups);
+        width = Math.Min(width, SystemParameters.VirtualScreenWidth - 24);
+
+        Width = width;
+        Height = height;
+
+        (double left, double top) = WindowPlacement.Clamp(
+            Left,
+            Top,
+            width,
+            height,
+            SystemParameters.VirtualScreenLeft,
+            SystemParameters.VirtualScreenTop,
+            SystemParameters.VirtualScreenWidth,
+            SystemParameters.VirtualScreenHeight);
+        Left = left;
+        Top = top;
+
+        _view.SetAppearance(normalized);
+        ApplyBackground();
+        ApplyBackdrop();
+        UpdateAppearanceChecks();
+    }
+
+    private void ApplyBackground()
+    {
+        if (!_appearance.IsTransparent)
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0x0B, 0x0E, 0x14));
+            return;
+        }
+
+        byte alpha = (byte)Math.Round(_appearance.OpacityPercent * 255 / 100.0, MidpointRounding.AwayFromZero);
+        Background = new SolidColorBrush(Color.FromArgb(alpha, 0x0B, 0x0E, 0x14));
+    }
+
+    private void ApplyBackdrop()
+    {
+        if (IsLoaded is false && new System.Windows.Interop.WindowInteropHelper(this).Handle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        if (!_appearance.IsTransparent)
+        {
+            WindowBackdrop.Disable(this);
+            return;
+        }
+
+        if (WindowBackdrop.TryEnable(this))
+        {
+            return;
+        }
+
+        // 系统不支持：回退不透明并让 App 落盘 100%
+        _opacityRoot!.IsEnabled = false;
+        _opacityRoot.Header = "透明度（当前系统不支持）";
+        _ = _applyAppearance(_appearance with { OpacityPercent = 100 });
+    }
 
     private MenuItem BuildIntervalMenu()
     {
@@ -129,6 +216,121 @@ public sealed class PanelWindow : Window
         return root;
     }
 
+    private MenuItem BuildAppearanceMenu()
+    {
+        var root = new MenuItem { Header = "外观" };
+
+        var layout = new MenuItem { Header = "布局" };
+        _layoutDetailed = new MenuItem { Header = "竖版详细", IsCheckable = true };
+        _layoutCompact = new MenuItem { Header = "横版紧凑", IsCheckable = true };
+        _layoutDetailed.Click += (_, _) => OnAppearancePicked(_appearance with { Layout = PanelLayout.Detailed });
+        _layoutCompact.Click += (_, _) => OnAppearancePicked(_appearance with { Layout = PanelLayout.Compact });
+        layout.Items.Add(_layoutDetailed);
+        layout.Items.Add(_layoutCompact);
+
+        _opacityRoot = new MenuItem { Header = "透明度" };
+        foreach (int percent in AppearanceSettings.OpacityPresets)
+        {
+            var item = new MenuItem
+            {
+                Header = percent == AppearanceSettings.MaxOpacity ? "不透明" : percent + "%",
+                IsCheckable = true,
+                Tag = percent,
+            };
+            item.Click += (_, _) => OnAppearancePicked(_appearance with { OpacityPercent = (int)item.Tag });
+            _opacityItems.Add(item);
+            _opacityRoot.Items.Add(item);
+        }
+
+        var bars = new MenuItem { Header = "进度条" };
+        _barsShow = new MenuItem { Header = "显示", IsCheckable = true };
+        _barsHide = new MenuItem { Header = "隐藏", IsCheckable = true };
+        _barsShow.Click += (_, _) => OnAppearancePicked(_appearance with { ShowBars = true });
+        _barsHide.Click += (_, _) => OnAppearancePicked(_appearance with { ShowBars = false });
+        bars.Items.Add(_barsShow);
+        bars.Items.Add(_barsHide);
+
+        var animation = new MenuItem { Header = "动画" };
+        _animSmooth = new MenuItem { Header = "平滑过渡（较费 CPU）", IsCheckable = true };
+        _animSnap = new MenuItem { Header = "立即跳变（默认，最省）", IsCheckable = true };
+        _animSmooth.Click += (_, _) => OnAppearancePicked(_appearance with { SmoothAnimation = true });
+        _animSnap.Click += (_, _) => OnAppearancePicked(_appearance with { SmoothAnimation = false });
+        animation.Items.Add(_animSnap);
+        animation.Items.Add(_animSmooth);
+
+        var groups = new MenuItem { Header = "显示部件" };
+        foreach (var group in PanelMetrics.GroupOrder)
+        {
+            PanelGroup captured = group;
+            var item = new MenuItem { Header = PanelMetrics.Label(group), IsCheckable = true };
+            item.Click += (_, _) => OnAppearancePicked(ToggleGroup(captured));
+            _groupItems[group] = item;
+            groups.Items.Add(item);
+        }
+
+        root.Items.Add(layout);
+        root.Items.Add(_opacityRoot);
+        root.Items.Add(bars);
+        root.Items.Add(animation);
+        root.Items.Add(groups);
+
+        root.SubmenuOpened += (_, _) => UpdateAppearanceChecks();
+        UpdateAppearanceChecks();
+        return root;
+    }
+
+    private AppearanceSettings ToggleGroup(PanelGroup group)
+    {
+        PanelGroup visible = _appearance.VisibleGroups ^ group;
+        return _appearance with { VisibleGroups = visible };
+    }
+
+    private void OnAppearancePicked(AppearanceSettings appearance)
+    {
+        AppearanceSettings applied = _applyAppearance(appearance);
+        ApplyAppearance(applied);
+    }
+
+    private void UpdateAppearanceChecks()
+    {
+        if (_layoutDetailed is not null && _layoutCompact is not null)
+        {
+            _layoutDetailed.IsChecked = _appearance.Layout == PanelLayout.Detailed;
+            _layoutCompact.IsChecked = _appearance.Layout == PanelLayout.Compact;
+        }
+
+        foreach (var item in _opacityItems)
+        {
+            item.IsChecked = (int)item.Tag == _appearance.OpacityPercent;
+        }
+
+        if (_barsShow is not null && _barsHide is not null)
+        {
+            _barsShow.IsChecked = _appearance.ShowBars;
+            _barsHide.IsChecked = !_appearance.ShowBars;
+            _barsShow.IsEnabled = _appearance.Layout == PanelLayout.Detailed;
+            _barsHide.IsEnabled = _appearance.Layout == PanelLayout.Detailed;
+        }
+
+        if (_animSmooth is not null && _animSnap is not null)
+        {
+            _animSmooth.IsChecked = _appearance.SmoothAnimation;
+            _animSnap.IsChecked = !_appearance.SmoothAnimation;
+            _animSmooth.IsEnabled = _appearance.Layout == PanelLayout.Detailed;
+            _animSnap.IsEnabled = _appearance.Layout == PanelLayout.Detailed;
+        }
+
+        foreach (var (group, item) in _groupItems)
+        {
+            bool visible = _appearance.IsVisible(group);
+            item.IsChecked = visible;
+
+            bool lastOne = visible && _appearance.VisibleGroups == group;
+            item.IsEnabled = !lastOne;
+            item.Header = lastOne ? PanelMetrics.Label(group) + "（至少保留一项）" : PanelMetrics.Label(group);
+        }
+    }
+
     private void OnPresetClicked(object sender, RoutedEventArgs e)
     {
         if (sender is MenuItem { Tag: double seconds })
@@ -139,7 +341,6 @@ public sealed class PanelWindow : Window
 
     private void OnCustomClicked(object sender, RoutedEventArgs e)
     {
-        // 菜单关闭会抢焦点，延后到下一轮消息泵再弹模态框
         Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(ShowCustomDialog));
     }
 
@@ -152,7 +353,7 @@ public sealed class PanelWindow : Window
         }
         else
         {
-            UpdateIntervalChecks();   // 取消后把勾选态恢复成真实值
+            UpdateIntervalChecks();
         }
     }
 
@@ -182,6 +383,8 @@ public sealed class PanelWindow : Window
         }
     }
 
+    private double HitHeaderHeight => _appearance.Layout == PanelLayout.Compact ? Height : HeaderHeight;
+
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ChangedButton != MouseButton.Left)
@@ -191,7 +394,7 @@ public sealed class PanelWindow : Window
 
         Point position = e.GetPosition(this);
 
-        if (position.Y < HeaderHeight)
+        if (position.Y < HitHeaderHeight)
         {
             if (position.X > Width - CloseZoneWidth)
             {
@@ -208,7 +411,7 @@ public sealed class PanelWindow : Window
 
         if (_isPinned)
         {
-            return;   // 固定：拖不动
+            return;
         }
 
         double beforeLeft = Left;
@@ -237,7 +440,6 @@ public sealed class PanelWindow : Window
 
         if (_isPinned)
         {
-            // "钉在当前停留的位置"：固定瞬间把实际坐标也记下来
             _onMoved(Left, Top);
         }
     }
@@ -245,7 +447,7 @@ public sealed class PanelWindow : Window
     private void OnMouseMove(object sender, MouseEventArgs e)
     {
         Point position = e.GetPosition(this);
-        bool onButton = position.Y < HeaderHeight && position.X > Width - CloseZoneWidth - PinZoneWidth;
+        bool onButton = position.Y < HitHeaderHeight && position.X > Width - CloseZoneWidth - PinZoneWidth;
 
         Cursor = onButton ? Cursors.Hand : _isPinned ? Cursors.Arrow : Cursors.SizeAll;
     }

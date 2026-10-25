@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json.Serialization;
+using LiteMon.Core.Appearance;
 using LiteMon.Core.Sensors;
 
 namespace LiteMon.Settings;
@@ -9,7 +10,7 @@ namespace LiteMon.Settings;
 /// </summary>
 public sealed record AppSettings
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
 
     public int Version { get; init; } = CurrentVersion;
 
@@ -24,6 +25,9 @@ public sealed record AppSettings
     /// <summary>窗口左上角 Y（DIP）；null 表示沿用默认位置。</summary>
     public double? WindowTop { get; init; }
 
+    /// <summary>外观（布局 / 透明度 / 进度条 / 动画 / 可见部件）。</summary>
+    public AppearanceSettings Appearance { get; init; } = new();
+
     /// <summary>默认设置（1 秒）。</summary>
     public static AppSettings Default { get; } = new();
 
@@ -33,7 +37,12 @@ public sealed record AppSettings
 
     /// <summary>把任意来源的值收敛到合法区间（手改配置、旧版本字段都可能越界）。</summary>
     public AppSettings Normalized()
-        => this with { RefreshIntervalSeconds = RefreshInterval.Normalize(RefreshIntervalSeconds) };
+        => this with
+        {
+            Version = CurrentVersion,
+            RefreshIntervalSeconds = RefreshInterval.Normalize(RefreshIntervalSeconds),
+            Appearance = Appearance.Normalized(),
+        };
 
     public override string ToString()
         => string.Create(CultureInfo.InvariantCulture, $"v{Version} {RefreshIntervalSeconds}s");
