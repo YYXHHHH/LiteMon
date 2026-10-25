@@ -1,78 +1,119 @@
-# LiteMon · 轻量硬件监控
+# LiteMon
 
-参考 [Diorser/LiteMonitor](https://github.com/Diorser/LiteMonitor) 的 Windows 桌面硬件监控项目规划。
+> 一个轻量的 Windows 硬件监控悬浮面板。Always-on-top hardware monitor for Windows.
 
-## 文档
+![详细面板](docs/images/panel-detailed.png)
 
-- **[技术方案](docs/技术方案.md)** —— 选型、架构、数据采集矩阵、性能预算、UI 设计、工程化、路线图、风险与合规。
-- **[开发手册](docs/开发手册.md)** —— 从零搭环境到发布的全流程：工程初始化、编码规范、M0 验证实验、逐模块实现、测试用例、调试手册、CI/CD、评审与质量门禁。
-- **[M0 验证报告](docs/M0-验证报告.md)** —— 实测数据、三个被推翻的假设（WPF 内存、NVMe 权限、LHM 返回值）与 Go/No-Go 结论。
-- **[进度记录](docs/进度.md)** —— 每周进展与性能数据。
+## 灵感来源
 
-## 当前状态（2026-10-20）
+本项目受 **[Diorser/LiteMonitor](https://github.com/Diorser/LiteMonitor)** 启发：
 
-可运行的面板 MVP：
+- 上游项目：<https://github.com/Diorser/LiteMonitor>
+- 引用的是**产品方向与传感器选型思路**（桌面常驻的硬件监控小工具、PDH/NVML/LibreHardwareMonitor 的数据来源）；
+- 本项目 **不是 fork，也没有复制上游代码**：渲染、采样调度、配置、交互全部从零实现，定位也更单一（只做一块只读的悬浮面板）。
 
-```powershell
-dotnet run --project src/LiteMon.App -c Release
-```
+如果你需要更完整的功能（任务栏嵌入、FPS、插件、内存清理），请直接使用上游项目。
 
-| 项 | 实测 |
+## 特点
+
+| 项 | 说明 |
 |---|---|
-| CPU 占用 | **1.6%（单核）**，优化前 11–14% |
-| 内存 | 工作集 ~185 MB / 私有 ~122 MB（WPF 基线，见 M0 报告） |
-| 刷新 | **可调 1/2/5/10 秒或自定义 1–60 秒**（右键 → 刷新间隔），12 项指标（CPU 使用率/频率、GPU 使用率/温度/显存、内存、磁盘读写、网络上下行、运行时长） |
-| 硬件型号 | 分组标题显示 CPU/GPU/内存/磁盘/网卡型号（如 Ryzen 7 8845H、RTX 4060 Laptop、Crucial 31.3 GB、YMTC PC411、MediaTek Wi-Fi 6E） |
-| 温度 | **CPU 70 ℃ 可读**（ACPI 热区回退，无需管理员）；内核温度需右键菜单提权（LHM/PawnIO） |
-| 交互 | 置顶、拖动、Esc/×/右键退出；右键菜单可切换刷新间隔（**选择持久化**到 `LiteMon.settings.json`） |
-| 固定悬浮窗 | 右上角**图钉**：点一下钉在当前屏幕位置（此时拖不动），再点解锁；位置与固定状态**重启后保留**，换分辨率/拔副屏自动回到可见区 |
-| 外观 | 右键「外观」：**竖版详细 / 横版紧凑**、**透明度 100/90/75/60/45%**（面板真透出桌面，白字带黑晕、文字不透明）、**进度条开关**、**动画开关**（默认关，最省）、**显示部件勾选**（CPU/GPU/内存/磁盘/网络/系统，至少留一项）；全部持久化 |
-| 资源占用 | 默认配置 **0.94%** 单核（旧版 1.6%，因默认关闭动画）；45% 透明竖版 **1.41%**（分层窗口，仅变化时重绘） |
+| 体积 | 便携版 147.7 MB（自包含）/ 轻量版 4.9 MB（需 .NET 10 桌面运行时） |
+| 资源占用 | 默认配置 **0.94%** 单核、约 190 MB 工作集（WPF 基线） |
+| 刷新 | 1 / 2 / 5 / 10 秒或自定义 1–60 秒，切换立即生效 |
+| 指标 | CPU 使用率/温度/频率、GPU 使用率/温度/显存、内存、磁盘读写、网络上下行、运行时长 |
+| 温度 | 免管理员：ACPI 热区；右键提权后：LibreHardwareMonitor（PawnIO）读内核温度 |
+| 外观 | 竖版详细 / 横版紧凑；透明度 100/90/75/60/45%；进度条开关；动画开关；逐部件勾选 |
+| 交互 | 无边框置顶、拖动、右上角图钉固定、右键菜单、Esc / × 退出 |
+| 配置 | 全部持久化到 exe 同目录的 `LiteMon.settings.json`（不可写时回退 `%LOCALAPPDATA%`） |
 
-已知问题：无托盘、无开机自启；ACPI 温度为热区近似值，内核温度需管理员。
+### 三种样子
 
-## 直接用（已打包）
+| 透明模式（45%） | 横版紧凑 |
+|---|---|
+| ![透明](docs/images/panel-transparent.png) | ![紧凑](docs/images/panel-compact.png) |
 
-| 包 | 体积 | 适用 |
-|---|---|---|
-| `release/LiteMon-portable-win-x64/`（zip 63.6 MB） | 149 MB | **自包含版**：不需要装 .NET，解压后双击 `LiteMon.exe` |
-| `release/LiteMon-lite-win-x64/`（zip 2.0 MB） | 4.9 MB | 轻量版：需要 .NET 10 桌面运行时 |
+## 环境要求
 
-启动约 4 秒（WPF 冷启动，已接受）。重新打包：
+- Windows 10 1809+ / Windows 11（x64）
+- .NET 10 SDK（仅编译需要；打包后的便携版不需要）
+
+## 快速开始
 
 ```powershell
+# 直接运行
+dotnet run --project src/LiteMon.App -c Release
+
+# 跑测试（xunit v3，注意不是 dotnet test）
+powershell -NoProfile -ExecutionPolicy Bypass -File build/test.ps1
+
+# 出便携版 + 轻量版（会在 release/ 生成目录与 zip）
 powershell -NoProfile -ExecutionPolicy Bypass -File build/publish.ps1
 ```
 
-> `release/` 已加入 `.gitignore`，二进制不进仓库；`build/publish.ps1` 可随时重建。
+> .NET 10 上 `dotnet test` 走 VSTest 已不受支持，测试项目是 MTP 可执行程序，必须用上面的脚本（内部为 `dotnet run --project`）。
 
-## 一分钟版
+## 目录结构
 
-| 项 | 结论 |
-|---|---|
-| 技术栈 | C# / **.NET 10 LTS** + **WPF 自绘** + LibreHardwareMonitorLib + 厂商 GPU SDK |
-| 体积目标 | 3–6 MB（框架依赖） / 55–70 MB（自包含） |
-| 常驻开销 | 内存 ≤ 60 MB，空闲 CPU ≤ 0.3%，1 s 刷新 |
-| 驱动策略 | 默认 **无驱动兼容模式**；温度/风扇/电压需用户显式开启 **PawnIO** 增强模式（不用 WinRing0） |
-| 进程模型 | M1 单进程；M3 视需要拆为「采集服务 + 低权限 UI」 |
-| 周期 | M0 验证 1 周 + M1 MVP 3 周 + M2 打磨 2 周 + M3 发布 2 周 ≈ 8 周 |
-
-## M0 验证清单（已完成）
-
-1. 用 LibreHardwareMonitorLib + PawnIO 在 Win11 实机读取 CPU 温度、主板风扇，记录权限、耗时、体积。
-2. 用 NVML 读取 NVIDIA GPU（温度/功耗/显存），验证无管理员权限可用。
-3. 用 IOCTL 读取 NVMe 温度，验证 Win10 / Win11 权限差异。
-4. WPF 自绘 12 项指标，测单帧耗时与工作集内存。
-5. 输出《M0 验证报告》，据此确认或调整选型。
-
-## 目录规划
-
+```text
+LiteMon.sln
+├─ src/
+│  ├─ LiteMon.App/         WPF 应用：无边框窗口、自绘面板、右键菜单、设置对话框
+│  ├─ LiteMon.Core/        指标模型、不可变快照、格式化、外观设置、窗口位置计算
+│  ├─ LiteMon.Sensors/     采样线程与各硬件 Provider（PDH / NVML / LHM / ACPI / WMI）
+│  └─ LiteMon.Settings/    配置读写（原子替换、损坏隔离、路径回退）
+├─ tests/
+│  ├─ LiteMon.Core.Tests/      指标、快照、格式化、外观、位置
+│  ├─ LiteMon.Sensors.Tests/   采样调度时序
+│  └─ LiteMon.Settings.Tests/  配置往返与容错
+├─ docs/                   技术方案、开发手册、M0 验证报告、各功能开发文档、进度
+│  └─ images/              README 截图
+├─ build/                  测试 / 打包 / 冒烟 / 截图脚本
+├─ spike/                  早期技术验证探针（不参与解决方案构建）
+├─ Directory.Build.props   统一编译设置（警告即错误、分析器）
+└─ Directory.Packages.props 集中包版本
 ```
-src/LiteMon.App          # WPF 壳
-src/LiteMon.Core         # 指标模型 / 快照 / 调度 / 告警
-src/LiteMon.Sensors      # PDH / NVML / ADLX / IGCL / LHM / NVMe / 网络 / WMI
-src/LiteMon.Rendering    # 自绘布局 / 主题 / 文本缓存
-src/LiteMon.Settings     # settings.json + Schema + 迁移
-src/LiteMon.Diagnostics  # 日志 / 诊断包
-tests/ themes/ docs/ build/
+
+## 架构一句话
+
+一个采样线程按"墙钟节拍"采集，产出**不可变快照**经 `SnapshotBus` 发布；UI 线程只在快照到达时重绘一帧（默认无动画、内容不变则不重绘），因此 1 秒刷新也只占不到 1% 单核。
+
+- 采样档位：Fast = 刷新间隔，Medium = max(2s, I)，Slow = max(10s, I)
+- 陈旧阈值：max(12s, 3×间隔)，避免大间隔被误判为过期
+- 透明模式：分层窗口 + 每像素 alpha，文字保持不透明（白字 + 8 向 1px 黑晕）
+
+更多设计细节见 [技术方案](docs/技术方案.md)、[开发手册](docs/开发手册.md)、[M0 验证报告](docs/M0-验证报告.md)。
+
+## 配置项
+
+`LiteMon.settings.json`（放在 exe 同目录，写不进就落到 `%LOCALAPPDATA%\LiteMon\`）：
+
+```json
+{
+  "version": 2,
+  "refreshIntervalSeconds": 1,
+  "isPinned": false,
+  "windowLeft": 1600,
+  "windowTop": 40,
+  "appearance": {
+    "layout": "detailed",
+    "opacityPercent": 100,
+    "showBars": true,
+    "smoothAnimation": false,
+    "visibleGroups": "cpu, gpu, memory, disk, network, system"
+  }
+}
 ```
+
+文件损坏会被改名成 `.bad` 并回退默认值；越界数值会按规则收敛。
+
+## 已知限制
+
+- 未提权时 CPU 温度来自 ACPI 热区（近似值），内核温度需要点一次 UAC
+- 透明模式是分层窗口（软件渲染），因此**强制关闭动画**；不透明模式默认也不动画，可在菜单打开
+- 暂无托盘图标、开机自启、单实例互斥
+- 仅支持 Windows；无跨平台计划
+
+## 许可
+
+MIT License，见 [LICENSE](LICENSE)。

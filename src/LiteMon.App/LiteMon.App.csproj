@@ -3,9 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\LiteMon.Core\LiteMon.Core.csproj" />
     <ProjectReference Include="..\LiteMon.Sensors\LiteMon.Sensors.csproj" />
-    <ProjectReference Include="..\LiteMon.Rendering\LiteMon.Rendering.csproj" />
     <ProjectReference Include="..\LiteMon.Settings\LiteMon.Settings.csproj" />
-    <ProjectReference Include="..\LiteMon.Diagnostics\LiteMon.Diagnostics.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
